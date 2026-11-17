@@ -1,5 +1,5 @@
-#include "keys.h"
-#include "crypto.h"
+#include MESH_KEYS_HEADER
+#include MESH_CRYPTO_HEADER
 
 #include <oqs/oqs.h>
 #include <stdio.h>
@@ -16,7 +16,7 @@ main(void)
     uint8_t signature[2420];
     uint8_t signature_hex[4841];
     size_t signature_length = 0;
-    uint8_t message[] = "Daochi account keypair";
+    uint8_t message[] = "Mesh account keypair";
     uint8_t random_a[32];
     uint8_t random_b[32];
     uint8_t exported[8200];

@@ -1,8 +1,8 @@
-#import "crypto"
+#import "mesh_client/crypto"
 #import "byte_text_linux"
 #import "oqs/Oqs"
 
-// Daochi account keys: an ML-DSA-44 key pair whose public id is the
+// Mesh account keys: an ML-DSA-44 key pair whose public id is the
 // SHA-256 of the public key. This creates and signs with keys and reads and
 // writes the key file formats, plain (account-key-v1) and passphrase
 // encrypted (ksync-account-key-v2). The app stores the keys; this library

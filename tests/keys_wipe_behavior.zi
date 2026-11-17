@@ -3,7 +3,7 @@
 // so each wipe is observed after it happens.
 #import "oqs/Oqs"
 #import "byte_text_linux"
-#import "keys"
+#import "mesh_client/keys"
 
 private_wipes: s32;
 signature_wipes: s32;

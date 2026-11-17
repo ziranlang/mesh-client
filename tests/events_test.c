@@ -1,4 +1,4 @@
-#include "events.h"
+#include MESH_EVENTS_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -58,6 +58,6 @@ int main(void)
         receive_event, &event) == AuthResult_AUTH_OK);
     assert(receiver.calls == 1);
     assert(event.kind == EventKind_EVENT_CHANGED && event.server_version == 7);
-    puts("Daochi Ziran remote events passed");
+    puts("Mesh Ziran remote events passed");
     return 0;
 }

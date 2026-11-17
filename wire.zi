@@ -1,4 +1,5 @@
-// Daochi client wire values shared by apps. The caller owns account keys,
+// Legacy daochi-* protocol constants below are released bytes; keep them unchanged.
+// Mesh client wire values shared by apps. The caller owns account keys,
 // hashing, HTTP transport, and the destination buffers.
 
 #scope_export

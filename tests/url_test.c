@@ -1,4 +1,4 @@
-#include "url.h"
+#include MESH_URL_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -27,6 +27,6 @@ int main(void)
     buffer.length = 4;
     assert(!NormalizeUrl(StringLiteral("localhost"), buffer));
     assert(output[0] == 0);
-    puts("Daochi Ziran URL policy passed");
+    puts("Mesh Ziran URL policy passed");
     return 0;
 }

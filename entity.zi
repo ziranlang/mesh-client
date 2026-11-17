@@ -1,8 +1,9 @@
+// Legacy daochi-* protocol constants below are released bytes; keep them unchanged.
 // Entity data: the account's own photos, levels and other things, kept once
-// and shared by every app of the account (Daochi docs/entity-data.md). All
+// and shared by every app of the account (Mesh docs/entity-data.md). All
 // keys come from the account private key bytes, so every app derives the
 // same ones. Keys and plaintext never leave the caller's buffers.
-#import "crypto"
+#import "mesh_client/crypto"
 #import "json_scan"
 
 ENTITY_KEY_BYTES :: 32
@@ -177,7 +178,7 @@ OpenEntityChunk :: (private_key: []u8, kind: string, hash: string, index: s64, s
 }
 
 // ---------------------------------------------------------------------------
-// Entity records: the daochi-record-v1 envelope (Daochi
+// Entity records: the daochi-record-v1 envelope (Mesh
 // docs/encrypted-record-profile-v1.md) sealed with the record key of their
 // kind. A sync request carries the envelope JSON as base64url "ciphertext"
 // beside the base64url "nonce", with key_id entity-v1.

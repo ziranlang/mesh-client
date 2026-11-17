@@ -1,11 +1,11 @@
 // The same v6 registration and signed transaction as Sync, advanced by polls.
-#import "async_client"
-#import "client"
-#import "auth"
-#import "sync"
+#import "mesh_client/async_client"
+#import "mesh_client/client"
+#import "mesh_client/auth"
+#import "mesh_client/sync"
 #import "net_http"
 #import "text_buffer"
-#import "sync_flow"
+#import "mesh_client/sync_flow"
 #import "byte_text_linux"
 
 c :: #system_library "c";

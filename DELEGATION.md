@@ -60,7 +60,7 @@ session; the host can explicitly renew with a fresh challenge. The async request
 can renew an expired session before its first mutation, and holds all request
 buffers until polling completes or its owned transfer is cancelled.
 
-This is a custom Daochi wire protocol using sender-bound proof and replay
+This is a custom Mesh wire protocol using sender-bound proof and replay
 principles, not OAuth DPoP. Server revocation, current app visibility/status and
 issuing-node checks remain authoritative on every request. Grants do not authorize
 other nodes, grant chaining, exports, deletion, payments or owner routes. Revocation

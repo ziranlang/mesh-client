@@ -1,9 +1,9 @@
 // Poll-driven counterpart of delegated session renewal and scoped requests.
-#import "delegated"
-#import "authorization"
-#import "async_client"
-#import "auth"
-#import "url"
+#import "mesh_client/delegated"
+#import "mesh_client/authorization"
+#import "mesh_client/async_client"
+#import "mesh_client/auth"
+#import "mesh_client/url"
 #import "net_http"
 #import "text_buffer"
 

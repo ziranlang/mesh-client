@@ -1,8 +1,8 @@
-// Synchronous Daochi client entry points. Hosts provide the bounded request
+// Synchronous Mesh client entry points. Hosts provide the bounded request
 // callback, so this module contains no platform or application implementation.
-#import "auth"
-#import "url"
-#import "wire"
+#import "mesh_client/auth"
+#import "mesh_client/url"
+#import "mesh_client/wire"
 #import "net_http"
 #import "text_buffer"
 

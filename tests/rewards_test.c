@@ -1,4 +1,4 @@
-#include "rewards.h"
+#include MESH_REWARDS_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -62,6 +62,6 @@ int main(void)
     assert(ClaimReward(client, &session, 1000, StringLiteral("shovey.secret-chest"), reply, &status) == AuthResult_AUTH_OK);
     assert(node.calls == 1 && status == 200);
     assert(ParseRewardClaim(StringView(answer, strlen(answer)), &claim) && claim.credited && claim.balance == 700000);
-    puts("Daochi rewards: claim body, answer parsing and a bearer claim passed");
+    puts("Mesh rewards: claim body, answer parsing and a bearer claim passed");
     return 0;
 }

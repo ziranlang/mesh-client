@@ -1,6 +1,6 @@
 // Portable challenge/login protocol. The application owns keys and the host
 // owns HTTP; neither is stored here.
-#import "wire"
+#import "mesh_client/wire"
 #import "json_scan"
 #import "text_buffer"
 

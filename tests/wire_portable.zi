@@ -1,5 +1,5 @@
-#import "wire"
-#import "transaction"
+#import "mesh_client/wire"
+#import "mesh_client/transaction"
 #import "text_buffer"
 
 #program_export

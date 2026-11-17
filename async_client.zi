@@ -1,9 +1,9 @@
 // A bounded request operation advanced by the host's frame/event loop.
 // Request data, identity, session, and output remain caller-owned until done.
-#import "client"
-#import "auth"
-#import "url"
-#import "wire"
+#import "mesh_client/client"
+#import "mesh_client/auth"
+#import "mesh_client/url"
+#import "mesh_client/wire"
 #import "net_http"
 #import "text_buffer"
 

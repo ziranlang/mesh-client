@@ -1,10 +1,11 @@
+// Legacy daochi-* protocol constants below are released bytes; keep them unchanged.
 // Owner-signed authorization wire values. Apps own storage and approval UI.
-#import "wire"
-#import "transaction"
+#import "mesh_client/wire"
+#import "mesh_client/transaction"
 #import "text_buffer"
 #import "json_scan"
-#import "crypto"
-#import "keys"
+#import "mesh_client/crypto"
+#import "mesh_client/keys"
 #import "oqs/Oqs"
 #import "byte_text_linux"
 

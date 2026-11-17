@@ -1,9 +1,10 @@
+// Legacy daochi-* protocol constants below are released bytes; keep them unchanged.
 // Key-bound session and scoped sync transports. Never populates HttpRequest.token.
-#import "authorization"
-#import "client"
-#import "auth"
-#import "wire"
-#import "url"
+#import "mesh_client/authorization"
+#import "mesh_client/client"
+#import "mesh_client/auth"
+#import "mesh_client/wire"
+#import "mesh_client/url"
 #import "net_http"
 #import "text_buffer"
 #import "json_scan"

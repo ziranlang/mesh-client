@@ -1,12 +1,12 @@
 // Protocol v6 sync orchestration. The host provisions and stores device keys;
-// this module signs the Daochi wire messages and sends them through Client.
-#import "client"
-#import "auth"
-#import "transaction"
-#import "wire"
+// this module signs the Mesh wire messages and sends them through Client.
+#import "mesh_client/client"
+#import "mesh_client/auth"
+#import "mesh_client/transaction"
+#import "mesh_client/wire"
 #import "net_http"
 #import "text_buffer"
-#import "url"
+#import "mesh_client/url"
 #import "c_string"
 #import "json_scan"
 

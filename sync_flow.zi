@@ -3,7 +3,7 @@
 #import "json_scan"
 #import "text_buffer"
 #import "c_string"
-#import "wire"
+#import "mesh_client/wire"
 
 SyncPageState :: struct {
     enabled: bool
@@ -181,7 +181,7 @@ AcceptSyncResponse :: (body: string, response: string, state: *SyncPageState,
         return false
     }
     records := FieldAt(response, changes, "encrypted_records")
-    // Daochi's released response omits an empty encrypted-record array.
+    // Mesh's released response omits an empty encrypted-record array.
     // An absent array is empty; a present value must still be an array.
     record_count: s32 = 0
     if records >= 0 {

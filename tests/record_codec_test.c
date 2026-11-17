@@ -1,4 +1,4 @@
-#include "record_codec.h"
+#include MESH_RECORD_CODEC_HEADER
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -13,29 +13,29 @@ int main(void)
     Slice source={.data=input,.length=sizeof input};
     Slice encoded={.data=packed,.length=sizeof packed};
     Slice decoded={.data=opened,.length=sizeof opened};
-    int64_t count=record_codec_PackRecord(source,encoded);
+    int64_t count=MESH_RECORD_CODEC_SYMBOL(PackRecord)(source,encoded);
     assert(count>12 && count<sizeof input/10);
     encoded.length=count;
-    assert(record_codec_RecordIsPacked(encoded));
-    assert(record_codec_PackedRecordSize(encoded,sizeof input)==sizeof input);
-    assert(record_codec_UnpackRecord(encoded,decoded,sizeof input)==sizeof input);
+    assert(MESH_RECORD_CODEC_SYMBOL(RecordIsPacked)(encoded));
+    assert(MESH_RECORD_CODEC_SYMBOL(PackedRecordSize)(encoded,sizeof input)==sizeof input);
+    assert(MESH_RECORD_CODEC_SYMBOL(UnpackRecord)(encoded,decoded,sizeof input)==sizeof input);
     assert(memcmp(input,opened,sizeof input)==0);
-    assert(record_codec_UnpackRecord(encoded,decoded,sizeof input-1)==-1);
+    assert(MESH_RECORD_CODEC_SYMBOL(UnpackRecord)(encoded,decoded,sizeof input-1)==-1);
     decoded.length=sizeof opened-1;
-    assert(record_codec_UnpackRecord(encoded,decoded,sizeof input)==-1);
+    assert(MESH_RECORD_CODEC_SYMBOL(UnpackRecord)(encoded,decoded,sizeof input)==-1);
     decoded.length=sizeof opened;
     ((unsigned char*)packed)[8]=255; ((unsigned char*)packed)[9]=255;
     ((unsigned char*)packed)[10]=255; ((unsigned char*)packed)[11]=255;
-    assert(record_codec_PackedRecordSize(encoded,8388608)==-1);
+    assert(MESH_RECORD_CODEC_SYMBOL(PackedRecordSize)(encoded,8388608)==-1);
     source.length=sizeof input;
-    count=record_codec_PackRecord(source,(Slice){.data=packed,.length=sizeof packed});
+    count=MESH_RECORD_CODEC_SYMBOL(PackRecord)(source,(Slice){.data=packed,.length=sizeof packed});
     encoded.length=count;
     packed[count-1]^=1;
-    assert(record_codec_UnpackRecord(encoded,decoded,sizeof input)==-1);
+    assert(MESH_RECORD_CODEC_SYMBOL(UnpackRecord)(encoded,decoded,sizeof input)==-1);
     source.length=2;
-    assert(record_codec_PackRecord(source,(Slice){.data=packed,.length=sizeof packed})==0);
+    assert(MESH_RECORD_CODEC_SYMBOL(PackRecord)(source,(Slice){.data=packed,.length=sizeof packed})==0);
     memset(input,'x',sizeof input);
-    assert(record_codec_PackRecord(source,(Slice){.data=packed,.length=sizeof packed})==0);
+    assert(MESH_RECORD_CODEC_SYMBOL(PackRecord)(source,(Slice){.data=packed,.length=sizeof packed})==0);
     puts("Packed records: bounded gzip, independent buffers, framing and corruption rejection passed");
     return 0;
 }

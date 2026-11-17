@@ -1,4 +1,4 @@
-#include "entity_api.h"
+#include MESH_ENTITY_API_HEADER
 
 #include <assert.h>
 #include <stdio.h>

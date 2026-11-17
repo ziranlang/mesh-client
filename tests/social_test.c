@@ -1,4 +1,4 @@
-#include "social.h"
+#include MESH_SOCIAL_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -112,6 +112,6 @@ int main(void)
     assert(RegisterAlias(client, &session, 1000,
         StringLiteral("Alice"), output, &status) == AuthResult_AUTH_OK);
     assert(server.calls == 6 && status == 200);
-    puts("Daochi Ziran social requests passed");
+    puts("Mesh Ziran social requests passed");
     return 0;
 }

@@ -1,4 +1,4 @@
-#include "crypto.h"
+#include MESH_CRYPTO_HEADER
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -288,6 +288,6 @@ main(void)
         return 1;
     }
 
-    puts("Daochi Ziran SHA-256, HMAC, PBKDF2, ChaCha20-Poly1305, XChaCha20-Poly1305 and hex vectors passed");
+    puts("Mesh Ziran SHA-256, HMAC, PBKDF2, ChaCha20-Poly1305, XChaCha20-Poly1305 and hex vectors passed");
     return 0;
 }

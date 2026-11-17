@@ -1,7 +1,7 @@
-// Account and friend operations shared by every Daochi application.
-#import "client"
-#import "auth"
-#import "wire"
+// Account and friend operations shared by every Mesh application.
+#import "mesh_client/client"
+#import "mesh_client/auth"
+#import "mesh_client/wire"
 #import "text_buffer"
 
 SpaceByte :: (byte: u8) -> bool {

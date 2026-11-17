@@ -1,4 +1,4 @@
-#include "crypto_native_api.h"
+#include MESH_CRYPTO_NATIVE_API_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -101,6 +101,6 @@ int main(void)
     assert(memcmp(hash, reference_hash, 32) == 0);
     assert(!ContentDerivePassword(bytes(key, 32), bytes(nonce, 15), bytes(hash, 32), 1, 8192));
     for (size_t i = 0; i < sizeof hash; i++) assert(hash[i] == 0);
-    puts("Daochi native content crypto matches released blobs and rejects changed context/key/nonce/tag");
+    puts("Mesh native content crypto matches released blobs and rejects changed context/key/nonce/tag");
     return 0;
 }

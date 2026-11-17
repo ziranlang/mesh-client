@@ -1,10 +1,10 @@
 // Signed account deletion advanced without blocking the host event loop.
-#import "account"
-#import "async_client"
-#import "client"
-#import "auth"
-#import "url"
-#import "wire"
+#import "mesh_client/account"
+#import "mesh_client/async_client"
+#import "mesh_client/client"
+#import "mesh_client/auth"
+#import "mesh_client/url"
+#import "mesh_client/wire"
 #import "net_http"
 #import "text_buffer"
 

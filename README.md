@@ -1,6 +1,6 @@
-# Daochi Client
+# Mesh Client
 
-Native clients can import `daochi_client/crypto_native` for bounded byte-slice
+Native clients can import `mesh_client/crypto_native` for bounded byte-slice
 SHA-256, streaming digests, HMAC-SHA-256, XChaCha20-Poly1305, secure random bytes,
 clearing buffers and compatible Argon2id exports. Link libsodium for this optional
 provider; it uses the same 24-byte nonces and appended authentication tags as
@@ -9,11 +9,24 @@ authenticated schema context, storage, and node policy. `keys.ValidateIdentity`
 verifies an existing binary ML-DSA-44 account and private-key proof without
 creating or replacing keys.
 
-Daochi Client is the independent Ziran library for applications that sync with
-Daochi. It contains no server, mesh node, database, or UI implementation.
+Mesh Client is the independent Ziran library for applications that sync with
+[Mesh](https://mesh.ziran-lang.org). It contains no server, mesh node, database,
+or UI implementation.
 It has no Kryon dependency and lives in the
-[Ziran organization](https://github.com/ziranlang/daochi-client). Add it with
-`ziran add https://github.com/ziranlang/daochi-client.git`.
+[Ziran organization](https://github.com/ziranlang/mesh-client). Add it with
+`ziran add https://github.com/ziranlang/mesh-client.git`.
+
+The package name and public dependency namespace are `mesh_client`. Release APIs use `MeshRelease`, `MeshParseRelease`,
+`MeshSha256Matches`, and the `MESH_RELEASE_*` limits. Old `daochi_client`
+imports and `Daochi*` source aliases are not provided.
+
+Released protocol values keep their original spelling: `daochi-*` signature
+contexts, `X-Daochi-*` HTTP headers, `daochi-record-v1` envelopes and
+`daochi-entity-v1/*` key derivation strings. The `account-key-v1` and
+`ksync-account-key-v2` key files, account IDs, stored state and result codes
+also stay unchanged. Renaming these bytes would invalidate signatures or prevent
+existing users from decrypting their data. This source/package rename does not
+migrate stored data or change the wire protocol.
 
 The protocol modules currently provide:
 
@@ -32,7 +45,7 @@ The protocol modules currently provide:
   native; link libsodium);
 - entity data keys and shared chunks (`entity.zi`): the record key of each kind
   of account data and convergent 8 MiB chunk sealing, so every app of the
-  account stores one copy of each photo or level (Daochi `docs/entity-data.md`),
+  account stores one copy of each photo or level (Mesh `docs/entity-data.md`),
   and entity records sealed and opened as `daochi-record-v1` envelopes in plain
   Ziran, without libsodium;
 - polled login, bearer requests, and signed sync operations
@@ -53,7 +66,7 @@ The protocol modules currently provide:
   [crypto](https://github.com/ziranlang/crypto) package.
 
 The application supplies the account signer and body digest; `keys.zi`
-provides both for Daochi account keys (`SignAccountMessage`, `Sha256Hex`), and
+provides both for Mesh account keys (`SignAccountMessage`, `Sha256Hex`), and
 the app still stores the keys. A host supplies
 bounded HTTP requests through `SendRequest`; the host must NUL terminate every
 response buffer, including on error. This keeps private keys in the app's key
@@ -85,8 +98,8 @@ node committed it. Sync recognizes the exact signed-transaction replay response
 and retries with a fresh nonce within its existing bounded recovery budget.
 The node's replay protection remains enforced.
 
-Import the package modules with `#import "daochi_client/client"` and
-`#import "daochi_client/sync"`. Set `Client.app_id`, supply a `Device` with a
+Import the package modules with `#import "mesh_client/client"` and
+`#import "mesh_client/sync"`. Set `Client.app_id`, supply a `Device` with a
 persisted Ed25519 key and signer, and supply a cryptographically random 64-digit
 hex nonce callback. `Sync` registers the device and signs the exact sync body
 with both the account and device keys. The app owns the payload format and
@@ -107,7 +120,7 @@ with `AUTH_REQUEST_FAILED`. Both request modes share the same one-login retry
 after a `401`; sync modes share the exact registration and transaction builders.
 
 Pass a `SyncFlow` to `BeginSync` to sync accounts larger than one response
-buffer. Daochi Client switches to the server's encrypted record pages after a
+buffer. Mesh Client switches to the server's encrypted record pages after a
 capacity failure, signs each page request, retries interrupted transfers and
 validates forward cursor progress. It retains a bounded response buffer across
 pages; total account size has no fixed client buffer limit. An optional transport

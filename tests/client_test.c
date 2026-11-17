@@ -1,4 +1,4 @@
-#include "client.h"
+#include MESH_CLIENT_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -180,6 +180,6 @@ int main(void)
         (Slice){.data = output, .length = sizeof output}, &status);
     assert(result == AuthResult_AUTH_PAYLOAD_FAILED);
     assert(server.sync_calls == 3);
-    puts("Daochi Ziran client login passed");
+    puts("Mesh Ziran client login passed");
     return 0;
 }

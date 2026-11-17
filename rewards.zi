@@ -2,10 +2,10 @@
 // The node keeps the catalog and gives each reward to an account once: a
 // client names only the reward, never an amount, and reads back whether this
 // claim credited it. Claiming again is safe and credits nothing.
-#import "client"
-#import "async_client"
-#import "auth"
-#import "wire"
+#import "mesh_client/client"
+#import "mesh_client/async_client"
+#import "mesh_client/auth"
+#import "mesh_client/wire"
 #import "net_http"
 #import "text_buffer"
 

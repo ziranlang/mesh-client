@@ -1,5 +1,5 @@
 // C test exports only; production primitives retain package-scoped symbols.
-#import "crypto_native"
+#import "mesh_client/crypto_native"
 
 #program_export
 ContentInitialize :: () -> bool { return Initialize() }

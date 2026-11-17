@@ -1,4 +1,4 @@
-#include "record_api.h"
+#include MESH_RECORD_API_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -141,6 +141,6 @@ int main(void)
     assert(RecordTestSeal(StringLiteral(ACCOUNT), APP, COLLECTION, ID, SCHEMA, StringLiteral("main key"),
         bytes(key, 32), bytes(plain, 4), bytes(nonce, 24), bytes(envelope, sizeof envelope)) == -1);
     assert(RecordTestEnvelopeBytes(StringLiteral(ACCOUNT), APP, COLLECTION, ID, SCHEMA, KEY_ID, 8388609) == -1);
-    puts("Daochi record profile v1 seals canonical metadata and opens with the libsodium reference");
+    puts("Mesh record profile v1 seals canonical metadata and opens with the libsodium reference");
     return 0;
 }

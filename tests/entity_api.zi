@@ -1,5 +1,5 @@
 // C test exports only; apps import entity directly.
-#import "entity"
+#import "mesh_client/entity"
 
 #program_export
 EntityTestRecordKey :: (private_key: []u8, kind: string, output: []u8) -> bool {
@@ -26,7 +26,7 @@ EntityTestOpen :: (private_key: []u8, kind: string, hash: string, index: s64, se
     return OpenEntityChunk(private_key, kind, hash, index, sealed, output)
 }
 
-#import "crypto"
+#import "mesh_client/crypto"
 
 #program_export
 EntityTestSha256Hex :: (data: []u8, output: []u8) {

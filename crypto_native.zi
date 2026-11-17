@@ -1,4 +1,4 @@
-// Native provider for existing Daochi client content encryption. The account,
+// Native provider for existing Mesh client content encryption. The account,
 // content key, nonce and authenticated context are supplied by the caller;
 // this module never creates identities, persists keys or sends requests.
 // Libsodium supplies the same XChaCha20-Poly1305 bytes used by existing blobs.

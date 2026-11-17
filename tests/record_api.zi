@@ -1,5 +1,5 @@
 // C test exports only; production record sealing keeps package-scoped symbols.
-#import "record"
+#import "mesh_client/record"
 
 Metadata :: (account_id: string, app_id: string, collection: string, id: string, schema: string) -> RecordMetadata {
     metadata: RecordMetadata

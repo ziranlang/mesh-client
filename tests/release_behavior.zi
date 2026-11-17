@@ -1,4 +1,4 @@
-#import "release"
+#import "mesh_client/release"
 #import "byte_text_linux"
 #import "vec"
 
@@ -54,7 +54,7 @@ main :: () -> s32 {
     lumi := Dependency("lumi", "900")
     diary := Dependency("diary", "800")
     json := Release("2.1.21", Pair(diary, lumi))
-    release := DaochiParseRelease(json, KEY, 1048576, Verify)
+    release := MeshParseRelease(json, KEY, 1048576, Verify)
     if !release.valid || release.sequence != 18 || TextFromCString(*release.app_id[0]) != "root" ||
     release.artifact_count != 1 || release.artifacts[0].size != 4096 || release.dependency_count != 2 ||
     TextFromCString(*release.dependencies[1].app_id[0]) != "lumi" || release.dependencies[0].size != 800 ||
@@ -70,19 +70,19 @@ main :: () -> s32 {
     }
     // Unsorted or repeated dependencies, a bad version, an oversized artifact
     // and a wrong signature each fail.
-    if DaochiParseRelease(Release("2.1.21", Pair(lumi, diary)), KEY, 1048576, Verify).valid ||
-    DaochiParseRelease(Release("2.1.21", Pair(lumi, lumi)), KEY, 1048576, Verify).valid ||
-    DaochiParseRelease(Release("2.01.21", diary), KEY, 1048576, Verify).valid ||
-    DaochiParseRelease(Release("2.1.21", diary), KEY, 2048, Verify).valid ||
-    DaochiParseRelease(Release("2.1.21", Dependency("Lumi", "900")), KEY, 1048576, Verify).valid {
+    if MeshParseRelease(Release("2.1.21", Pair(lumi, diary)), KEY, 1048576, Verify).valid ||
+    MeshParseRelease(Release("2.1.21", Pair(lumi, lumi)), KEY, 1048576, Verify).valid ||
+    MeshParseRelease(Release("2.01.21", diary), KEY, 1048576, Verify).valid ||
+    MeshParseRelease(Release("2.1.21", diary), KEY, 2048, Verify).valid ||
+    MeshParseRelease(Release("2.1.21", Dependency("Lumi", "900")), KEY, 1048576, Verify).valid {
         return 3
     }
     calls := verify_calls
-    if DaochiParseRelease(Release("2.1.21", diary), "abc", 1048576, Verify).valid || verify_calls != calls {
+    if MeshParseRelease(Release("2.1.21", diary), "abc", 1048576, Verify).valid || verify_calls != calls {
         return 4
     }
-    if !DaochiSha256Matches("abc", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad") ||
-    DaochiSha256Matches("abd", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad") {
+    if !MeshSha256Matches("abc", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad") ||
+    MeshSha256Matches("abd", "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad") {
         return 5
     }
     return 0

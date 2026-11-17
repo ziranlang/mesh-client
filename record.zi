@@ -1,10 +1,11 @@
-// Daochi encrypted record profile v1 ("daochi-record-v1"). The caller supplies
+// Legacy daochi-* protocol constants below are released bytes; keep them unchanged.
+// Mesh encrypted record profile v1 ("daochi-record-v1"). The caller supplies
 // the content key and the authoritative routing metadata; this module only
 // seals. Keys and plaintext never leave the caller's buffers.
 #scope_module
-#import "wire"
+#import "mesh_client/wire"
 #import "byte_text_linux"
-Native :: #import "crypto_native";
+Native :: #import "mesh_client/crypto_native";
 sodium :: #system_library "sodium";
 c :: #system_library "c";
 Base64Raw :: (output: *u8, capacity: usize, input: *u8, count: usize, variant: s32) -> *u8 #foreign sodium "sodium_bin2base64";

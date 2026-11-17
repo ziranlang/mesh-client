@@ -1,4 +1,4 @@
-#include "wire.h"
+#include MESH_WIRE_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -46,6 +46,6 @@ int main(void)
     assert(!BuildLoginBody(StringView(account_id, 64),
         StringLiteral("client-1"), StringLiteral("key"), buffer));
     assert(output[0] == 0);
-    puts("Daochi Ziran wire contract passed");
+    puts("Mesh Ziran wire contract passed");
     return 0;
 }

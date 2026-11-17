@@ -1,5 +1,5 @@
 [package]
-name = "DaochiClient"
+name = "mesh_client"
 module_roots = ["."]
 
 [toolchain]

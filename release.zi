@@ -1,9 +1,10 @@
+// Legacy daochi-* protocol constants below are released bytes; keep them unchanged.
 // Signed app releases, format "daochi-zib-release-v2". A release names an
 // app, its sequence and version, the runtime and host APIs it needs, the
 // artifacts that deliver it and the packages it depends on, all signed with
 // Ed25519 by the key the publisher registered for the app.
 //
-// DaochiParseRelease checks the release's shape and signature; the caller
+// MeshParseRelease checks the release's shape and signature; the caller
 // checks its own policy: the app it expects, a runtime and API range it
 // supports, and which dependencies it accepts. The signature check is a
 // callback, so applications keep their own Ed25519 implementation.
@@ -11,29 +12,29 @@
 #import "byte_text_linux"
 #import "vec"
 #import "text"
-#import "crypto"
+#import "mesh_client/crypto"
 
 release_c :: #system_library "c";
 ReleaseFree :: (data: *u8) #foreign release_c "free";
 
-DAOCHI_RELEASE_ARTIFACTS :: 2
-DAOCHI_RELEASE_DEPENDENCIES :: 16
-DAOCHI_RELEASE_JSON_LIMIT :: 65536
+MESH_RELEASE_ARTIFACTS :: 2
+MESH_RELEASE_DEPENDENCIES :: 16
+MESH_RELEASE_JSON_LIMIT :: 65536
 
-DaochiReleaseArtifact :: struct {
+MeshReleaseArtifact :: struct {
     variant: [32]u8
     sha256: [65]u8
     size: s64
 }
 
-DaochiReleaseDependency :: struct {
+MeshReleaseDependency :: struct {
     app_id: [64]u8
     version: [32]u8
     sha256: [65]u8
     size: s64
 }
 
-DaochiRelease :: struct {
+MeshRelease :: struct {
     app_id: [64]u8
     sequence: s64
     version: [32]u8
@@ -43,19 +44,19 @@ DaochiRelease :: struct {
     data_schema: s64
     key_id: [64]u8
     // The first artifact is "module", an optional second "standalone".
-    artifacts: [DAOCHI_RELEASE_ARTIFACTS]DaochiReleaseArtifact
+    artifacts: [MESH_RELEASE_ARTIFACTS]MeshReleaseArtifact
     artifact_count: s32
     // Sorted by app id, each at most once.
-    dependencies: [DAOCHI_RELEASE_DEPENDENCIES]DaochiReleaseDependency
+    dependencies: [MESH_RELEASE_DEPENDENCIES]MeshReleaseDependency
     dependency_count: s32
     valid: bool
 }
 
 // True when signature (64 bytes) signs message under public_key (32 bytes).
-DaochiReleaseVerify :: #type (signature: *u8, public_key: *u8, message: *u8, length: usize) -> bool;
+MeshReleaseVerify :: #type (signature: *u8, public_key: *u8, message: *u8, length: usize) -> bool;
 
 // A dotted version of three numbers without leading zeros, such as 2.1.28.
-DaochiVersionValid :: (version: string) -> bool {
+MeshVersionValid :: (version: string) -> bool {
     parts: s32 = 0
     digits: s32 = 0
     first: u8 = 0
@@ -80,7 +81,7 @@ DaochiVersionValid :: (version: string) -> bool {
 }
 
 // Lowercase letters and digits, then also ".", "_" and "-"; at most 63 bytes.
-DaochiIdentifierValid :: (value: string) -> bool {
+MeshIdentifierValid :: (value: string) -> bool {
     if value.count == 0 || value.count > 63 || value == "." || value == ".." {
         return false
     }
@@ -95,7 +96,7 @@ DaochiIdentifierValid :: (value: string) -> bool {
 }
 
 // 64 lowercase hex digits.
-DaochiHashValid :: (hash: string) -> bool {
+MeshHashValid :: (hash: string) -> bool {
     if hash.count != 64 {
         return false
     }
@@ -108,7 +109,7 @@ DaochiHashValid :: (hash: string) -> bool {
 }
 
 // Byte order, shorter first.
-DaochiCompare :: (left: string, right: string) -> s32 {
+MeshCompare :: (left: string, right: string) -> s32 {
     at: s64 = 0
     while at < left.count && at < right.count {
         if left[at] < right[at] {
@@ -123,8 +124,8 @@ DaochiCompare :: (left: string, right: string) -> s32 {
 }
 
 // Whether bytes hash to sha256, 64 lowercase hex digits.
-DaochiSha256Matches :: (bytes: string, sha256: string) -> bool {
-    if !DaochiHashValid(sha256) {
+MeshSha256Matches :: (bytes: string, sha256: string) -> bool {
+    if !MeshHashValid(sha256) {
         return false
     }
     actual: [65]u8
@@ -168,10 +169,10 @@ ReleaseCopy :: (value: string, output: []u8) {
 // Parses json and checks its signature under public_hex, the app key's 64
 // hex digits. Each artifact and dependency is at least 8 bytes and at most
 // maximum_size. The result is valid only when everything checks out.
-DaochiParseRelease :: (json: string, public_hex: string, maximum_size: s64,
-    verify: DaochiReleaseVerify) -> DaochiRelease {
-    release: DaochiRelease
-    if json.count > DAOCHI_RELEASE_JSON_LIMIT || json.count < 2 || json[0] != #char "{" ||
+MeshParseRelease :: (json: string, public_hex: string, maximum_size: s64,
+    verify: MeshReleaseVerify) -> MeshRelease {
+    release: MeshRelease
+    if json.count > MESH_RELEASE_JSON_LIMIT || json.count < 2 || json[0] != #char "{" ||
     Space(json, ValueEnd(json, 0, 0)) != json.count || public_hex.count != 64 || verify == null {
         return release
     }
@@ -189,8 +190,8 @@ DaochiParseRelease :: (json: string, public_hex: string, maximum_size: s64,
     host := ReleaseNumber(json, 0, "host_api")
     module := ReleaseNumber(json, 0, "module_api")
     schema := ReleaseNumber(json, 0, "data_schema")
-    if !DaochiIdentifierValid(app_id) || !DaochiVersionValid(version_text) || runtime_text.count == 0 ||
-    !DaochiIdentifierValid(key_id) || sequence <= 0 || host < 0 || module < 0 || schema < 0 ||
+    if !MeshIdentifierValid(app_id) || !MeshVersionValid(version_text) || runtime_text.count == 0 ||
+    !MeshIdentifierValid(key_id) || sequence <= 0 || host < 0 || module < 0 || schema < 0 ||
     signed.count != 128 {
         return release
     }
@@ -198,8 +199,8 @@ DaochiParseRelease :: (json: string, public_hex: string, maximum_size: s64,
     artifact_count := ArrayCount(json, artifacts)
     dependencies := FieldAt(json, 0, "dependencies")
     dependency_count := ArrayCount(json, dependencies)
-    if artifact_count < 1 || artifact_count > DAOCHI_RELEASE_ARTIFACTS ||
-    dependency_count < 0 || dependency_count > DAOCHI_RELEASE_DEPENDENCIES {
+    if artifact_count < 1 || artifact_count > MESH_RELEASE_ARTIFACTS ||
+    dependency_count < 0 || dependency_count > MESH_RELEASE_DEPENDENCIES {
         return release
     }
     message: Vec(u8)
@@ -212,9 +213,9 @@ DaochiParseRelease :: (json: string, public_hex: string, maximum_size: s64,
         hash := ReleaseField(json, at, "sha256", entry.sha256[:])
         size := ReleaseNumber(json, at, "size")
         expected := ifx artifact == 0 then "module" else "standalone"
-        if variant != expected || !DaochiHashValid(hash) || size < 8 || size > maximum_size {
+        if variant != expected || !MeshHashValid(hash) || size < 8 || size > maximum_size {
             VecFree(message)
-            return DaochiRelease.{}
+            return MeshRelease.{}
         }
         entry.size = size
         BuilderPrint(*message, "%\n%\n%\n", variant, hash, size)
@@ -228,11 +229,11 @@ DaochiParseRelease :: (json: string, public_hex: string, maximum_size: s64,
         hash := ReleaseField(json, at, "sha256", entry.sha256[:])
         size := ReleaseNumber(json, at, "size")
         previous := ifx dependency > 0 then TextFromCString(*release.dependencies[dependency - 1].app_id[0]) else ""
-        if !DaochiIdentifierValid(id) || id == app_id || !DaochiVersionValid(dependency_version) ||
-        !DaochiHashValid(hash) || size < 8 || size > maximum_size ||
-        (dependency > 0 && DaochiCompare(previous, id) >= 0) {
+        if !MeshIdentifierValid(id) || id == app_id || !MeshVersionValid(dependency_version) ||
+        !MeshHashValid(hash) || size < 8 || size > maximum_size ||
+        (dependency > 0 && MeshCompare(previous, id) >= 0) {
             VecFree(message)
-            return DaochiRelease.{}
+            return MeshRelease.{}
         }
         entry.size = size
         BuilderPrint(*message, "%\n%\n%\n%\n", id, dependency_version, hash, size)
@@ -246,7 +247,7 @@ DaochiParseRelease :: (json: string, public_hex: string, maximum_size: s64,
         verify(*signature_bytes[0], *public_key[0], descriptor.data, cast(usize)text.count)
     ReleaseFree(descriptor.data)
     if !verified {
-        return DaochiRelease.{}
+        return MeshRelease.{}
     }
     ReleaseCopy(app_id, release.app_id[:])
     ReleaseCopy(version_text, release.version[:])

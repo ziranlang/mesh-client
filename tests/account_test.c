@@ -1,4 +1,4 @@
-#include "account.h"
+#include MESH_ACCOUNT_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -81,6 +81,6 @@ int main(void)
     server.requests = 0;
     assert(DeleteAccount(client) == AuthResult_AUTH_INVALID_URL);
     assert(server.requests == 0);
-    puts("Daochi Ziran signed account deletion passed");
+    puts("Mesh Ziran signed account deletion passed");
     return 0;
 }

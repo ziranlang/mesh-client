@@ -1,4 +1,4 @@
-// Daochi server URLs use HTTPS except for loopback and private LAN hosts.
+// Mesh server URLs use HTTPS except for loopback and private LAN hosts.
 #import "text_buffer"
 
 StartsWith :: (value: string, prefix: string) -> bool {

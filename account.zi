@@ -1,9 +1,9 @@
 // Account deletion uses a fresh challenge and account signature. No private
-// key or exported backup is sent to Daochi.
-#import "client"
-#import "auth"
-#import "url"
-#import "wire"
+// key or exported backup is sent to Mesh.
+#import "mesh_client/client"
+#import "mesh_client/auth"
+#import "mesh_client/url"
+#import "mesh_client/wire"
 #import "net_http"
 #import "text_buffer"
 

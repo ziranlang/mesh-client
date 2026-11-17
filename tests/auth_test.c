@@ -1,4 +1,4 @@
-#include "auth.h"
+#include MESH_AUTH_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -85,6 +85,6 @@ int main(void)
     assert(session.token[0] == 0);
     result = AcceptLogin(200, StringLiteral("{}"), &session);
     assert(result == AuthResult_AUTH_PAYLOAD_FAILED);
-    puts("Daochi Ziran login protocol passed");
+    puts("Mesh Ziran login protocol passed");
     return 0;
 }

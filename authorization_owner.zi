@@ -1,10 +1,11 @@
+// Legacy daochi-* protocol constants below are released bytes; keep them unchanged.
 // Owner operations retain protocol v6 ML-DSA and registered-device signatures.
-#import "authorization"
-#import "sync"
-#import "transaction"
-#import "client"
-#import "auth"
-#import "wire"
+#import "mesh_client/authorization"
+#import "mesh_client/sync"
+#import "mesh_client/transaction"
+#import "mesh_client/client"
+#import "mesh_client/auth"
+#import "mesh_client/wire"
 #import "text_buffer"
 #import "net_http"
 

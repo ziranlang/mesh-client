@@ -1,4 +1,4 @@
-#include "sync.h"
+#include MESH_SYNC_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -184,7 +184,7 @@ static void check_request_preparation(Client client, Device device)
         expected_body = i < 2 ? StringLiteral("") : StringView(binary, sizeof binary);
         String method = StringView(methods[i], strlen(methods[i]));
         String path = StringLiteral("/api/v1/blobs/photos/abcdef?part=1");
-        assert(sync_PrepareRequestHeader(client, &session, device, 1007, NULL, request_nonce,
+        assert(MESH_SYNC_SYMBOL(PrepareRequestHeader)(client, &session, device, 1007, NULL, request_nonce,
             method, path, expected_body, buffer) == AuthResult_AUTH_OK);
         char expected[128];
         snprintf(expected, sizeof expected, "\n%s\n/api/v1/blobs/photos/abcdef?part=1\n", methods[i]);
@@ -194,10 +194,10 @@ static void check_request_preparation(Client client, Device device)
     }
 
     expected_body = StringLiteral("{\"protocol_version\":6}");
-    assert(sync_PrepareSyncHeader(client, &session, device, 1007, NULL, request_nonce,
+    assert(MESH_SYNC_SYMBOL(PrepareSyncHeader)(client, &session, device, 1007, NULL, request_nonce,
         expected_body, buffer) == AuthResult_AUTH_OK);
     strcpy(legacy, output);
-    assert(sync_PrepareRequestHeader(client, &session, device, 1007, NULL, request_nonce,
+    assert(MESH_SYNC_SYMBOL(PrepareRequestHeader)(client, &session, device, 1007, NULL, request_nonce,
         StringLiteral("POST"), StringLiteral("/api/v1/sync"), expected_body,
         buffer) == AuthResult_AUTH_OK);
     assert(strcmp(legacy, output) == 0);
@@ -206,20 +206,20 @@ static void check_request_preparation(Client client, Device device)
     memset(path, 'x', sizeof path - 1);
     path[0] = '/';
     path[sizeof path - 1] = 0;
-    assert(sync_PrepareRequestHeader(client, &session, device, 1007, NULL, request_nonce,
+    assert(MESH_SYNC_SYMBOL(PrepareRequestHeader)(client, &session, device, 1007, NULL, request_nonce,
         StringLiteral("PUT"), StringView(path, sizeof path - 1), expected_body,
         buffer) == AuthResult_AUTH_OK);
 
     int signs = prepared.account_signs;
-    assert(sync_PrepareRequestHeader(client, &session, device, 1007, NULL, request_nonce,
+    assert(MESH_SYNC_SYMBOL(PrepareRequestHeader)(client, &session, device, 1007, NULL, request_nonce,
         StringLiteral("PUT"), StringLiteral("/bad\npath"), expected_body,
         buffer) == AuthResult_AUTH_PAYLOAD_FAILED);
     assert(output[0] == 0 && prepared.account_signs == signs);
-    assert(sync_PrepareRequestHeader(client, NULL, device, 1007, NULL, request_nonce,
+    assert(MESH_SYNC_SYMBOL(PrepareRequestHeader)(client, NULL, device, 1007, NULL, request_nonce,
         StringLiteral("PUT"), StringLiteral("/valid"), expected_body,
         buffer) == AuthResult_AUTH_PAYLOAD_FAILED);
     assert(output[0] == 0 && prepared.account_signs == signs);
-    assert(sync_PrepareRequestHeader(client, &session, device, 1007, NULL, NULL,
+    assert(MESH_SYNC_SYMBOL(PrepareRequestHeader)(client, &session, device, 1007, NULL, NULL,
         StringLiteral("PUT"), StringLiteral("/valid"), expected_body,
         buffer) == AuthResult_AUTH_PAYLOAD_FAILED);
 
@@ -235,34 +235,34 @@ static void check_request_preparation(Client client, Device device)
         .body_sha256_hex = StringView(hex, 64),
         .expires_at = 2000000000,
     };
-    assert(sync_SignTransactionHeader(client, device, transaction, StringLiteral("HEAD"),
+    assert(MESH_SYNC_SYMBOL(SignTransactionHeader)(client, device, transaction, StringLiteral("HEAD"),
         StringLiteral("/api/v1/blobs/photos/abcdef"), buffer) == AuthResult_AUTH_OK);
     assert(strstr(output, "\"expires_at\":2000000000"));
     signs = prepared.account_signs;
     SyncTransaction wrong = transaction;
     wrong.account_id = StringView(hex, 64);
-    assert(sync_SignTransactionHeader(client, device, wrong, StringLiteral("HEAD"),
+    assert(MESH_SYNC_SYMBOL(SignTransactionHeader)(client, device, wrong, StringLiteral("HEAD"),
         StringLiteral("/valid"), buffer) == AuthResult_AUTH_PAYLOAD_FAILED);
     wrong = transaction;
     wrong.app_id = StringLiteral("another-app");
-    assert(sync_SignTransactionHeader(client, device, wrong, StringLiteral("HEAD"),
+    assert(MESH_SYNC_SYMBOL(SignTransactionHeader)(client, device, wrong, StringLiteral("HEAD"),
         StringLiteral("/valid"), buffer) == AuthResult_AUTH_PAYLOAD_FAILED);
     wrong = transaction;
     wrong.device_key_id = StringView(hex, 64);
-    assert(sync_SignTransactionHeader(client, device, wrong, StringLiteral("HEAD"),
+    assert(MESH_SYNC_SYMBOL(SignTransactionHeader)(client, device, wrong, StringLiteral("HEAD"),
         StringLiteral("/valid"), buffer) == AuthResult_AUTH_PAYLOAD_FAILED);
     assert(output[0] == 0 && prepared.account_signs == signs);
     prepared.fail_device = true;
-    assert(sync_SignTransactionHeader(client, device, transaction, StringLiteral("HEAD"),
+    assert(MESH_SYNC_SYMBOL(SignTransactionHeader)(client, device, transaction, StringLiteral("HEAD"),
         StringLiteral("/valid"), buffer) == AuthResult_AUTH_SIGN_FAILED);
     assert(output[0] == 0);
     prepared.fail_device = false;
     Slice tiny = {.data = output, .length = 16};
-    assert(sync_SignTransactionHeader(client, device, transaction, StringLiteral("HEAD"),
+    assert(MESH_SYNC_SYMBOL(SignTransactionHeader)(client, device, transaction, StringLiteral("HEAD"),
         StringLiteral("/valid"), tiny) == AuthResult_AUTH_PAYLOAD_FAILED);
     assert(output[0] == 0);
     device.signer = NULL;
-    assert(sync_SignTransactionHeader(client, device, transaction, StringLiteral("HEAD"),
+    assert(MESH_SYNC_SYMBOL(SignTransactionHeader)(client, device, transaction, StringLiteral("HEAD"),
         StringLiteral("/valid"), buffer) == AuthResult_AUTH_PAYLOAD_FAILED);
     assert(output[0] == 0);
 }
@@ -309,6 +309,6 @@ int main(void)
     assert(result == AuthResult_AUTH_OK && status == 200 && server.stage == 5);
     assert(server.account_signs == 4 && server.device_signs == 2 && server.nonces == 5);
     check_request_preparation(client, device);
-    puts("Daochi Ziran signed sync passed");
+    puts("Mesh Ziran signed sync passed");
     return 0;
 }

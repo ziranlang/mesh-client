@@ -1,16 +1,16 @@
-#import "async_client"
-#import "async_sync"
-#import "async_account"
-#import "client"
-#import "sync"
-#import "auth"
+#import "mesh_client/async_client"
+#import "mesh_client/async_sync"
+#import "mesh_client/async_account"
+#import "mesh_client/client"
+#import "mesh_client/sync"
+#import "mesh_client/auth"
 #import "net_http"
 #import "text_buffer"
 #import "c_string"
 #import "json_scan"
-#import "sync_flow"
-#import "wire"
-#import "transaction"
+#import "mesh_client/sync_flow"
+#import "mesh_client/wire"
+#import "mesh_client/transaction"
 #import "byte_text_linux"
 c :: #system_library "c";
 TestAllocate :: (size: usize) -> *void #foreign c "malloc";
@@ -460,7 +460,7 @@ CheckEmptyRecordPages :: () -> bool {
     state := SyncPageState.{.enabled = true}
     next: SyncPageState
     body := "{\"since_server_version\":50}"
-    // Daochi omits encrypted_records when no records changed (omitempty).
+    // Mesh omits encrypted_records when no records changed (omitempty).
     prefix := "{\"protocol_version\":6,\"encrypted_records_only\":true,\"server_version\":50,\"changes_complete\":true,\"changes\":"
     response: [512]u8
     writer := Writer.{.output = response[:], .valid = true}

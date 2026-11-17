@@ -1,8 +1,8 @@
 // Remote sync events are transport independent. Hosts open the WebSocket and
 // return one bounded JSON event through ReceiveEvent.
-#import "client"
-#import "auth"
-#import "url"
+#import "mesh_client/client"
+#import "mesh_client/auth"
+#import "mesh_client/url"
 #import "text_buffer"
 
 EventKind :: enum {

@@ -1,5 +1,6 @@
+// Legacy daochi-* protocol constants below are released bytes; keep them unchanged.
 // Protocol v6 device registration and signed sync transaction wire formats.
-#import "wire"
+#import "mesh_client/wire"
 
 DeviceRegistration :: struct {
     account_id: string

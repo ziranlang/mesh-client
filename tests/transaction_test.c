@@ -1,4 +1,4 @@
-#include "transaction.h"
+#include MESH_TRANSACTION_HEADER
 
 #include <assert.h>
 #include <stdio.h>
@@ -106,6 +106,6 @@ int main(void)
     buffer.length = sizeof output;
     assert(!BuildSyncTransactionMessage(transaction, buffer));
     assert(output[0] == 0);
-    puts("Daochi Ziran v6 transaction wire passed");
+    puts("Mesh Ziran v6 transaction wire passed");
     return 0;
 }
