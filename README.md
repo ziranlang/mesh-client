@@ -13,8 +13,8 @@ Mesh Client is the independent Ziran library for applications that sync with
 [Mesh](https://mesh.ziran-lang.org). It contains no server, mesh node, database,
 or UI implementation.
 It has no Kryon dependency and lives in the
-[Ziran organization](https://github.com/ziranlang/mesh-client). Add it with
-`ziran add https://github.com/ziranlang/mesh-client.git`.
+[Ziran organization](https://git.waozi.xyz/ziranlang/mesh-client). Add it with
+`ziran add https://git.waozi.xyz/ziranlang/mesh-client.git`.
 
 The package name and public dependency namespace are `mesh_client`. Release APIs use `MeshRelease`, `MeshParseRelease`,
 `MeshSha256Matches`, and the `MESH_RELEASE_*` limits. Old `daochi_client`
@@ -63,7 +63,7 @@ The protocol modules currently provide:
   package);
 - PBKDF2 for the key files, ChaCha20-Poly1305 and XChaCha20-Poly1305
   (`crypto.zi`), which also passes on SHA-256, HMAC-SHA-256 and hex from the
-  [crypto](https://github.com/ziranlang/crypto) package.
+  [crypto](https://git.waozi.xyz/ziranlang/crypto) package.
 
 The application supplies the account signer and body digest; `keys.zi`
 provides both for Mesh account keys (`SignAccountMessage`, `Sha256Hex`), and

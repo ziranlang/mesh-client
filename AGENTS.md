@@ -1,7 +1,7 @@
 # Mesh Client repository rules
 
 - The canonical checkout is `~/Projects/ziranlang/packages/mesh-client`,
-  on `master`, with origin `https://github.com/ziranlang/mesh-client.git`.
+  on `master`, with origin `https://git.waozi.xyz/ziranlang/mesh-client.git`.
   This is a general Ziran library; keep it independent of Kryon's UI/runtime.
 - This repository owns reusable Mesh client protocol and request behavior.
   The Mesh Go server and mesh node stay in the Mesh server repository;

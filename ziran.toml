@@ -3,7 +3,7 @@ name = "mesh_client"
 module_roots = ["."]
 
 [toolchain]
-git = "https://github.com/ziranlang/ziran.git"
+git = "https://git.waozi.xyz/ziranlang/ziran.git"
 ref = "9432a110709c4a4f72c4f732fcfc368e15213a54"
 
 [exports]
@@ -35,9 +35,9 @@ url = "url.zi"
 wire = "wire.zi"
 
 [dependencies.oqs]
-git = "https://github.com/ziranlang/oqs.git"
-ref = "master"
+git = "https://git.waozi.xyz/ziranlang/oqs.git"
+ref = "22d2ddbdc236796953c905a05a2cebf5ab1b4ff3"
 
 [dependencies.crypto]
-git = "https://github.com/ziranlang/crypto.git"
-ref = "master"
+git = "https://git.waozi.xyz/ziranlang/crypto.git"
+ref = "944826f70779a6b6cd53f6b06a75b36f4d8a2558"

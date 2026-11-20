@@ -5,18 +5,18 @@
       "commit": "22d2ddbdc236796953c905a05a2cebf5ab1b4ff3",
       "dependencies": {"liboqs": "pee6b73d51e8cbbd3"},
       "dependency_refs": {"liboqs": "main"},
-      "id": "p7098ac9cd92f7e5f",
+      "id": "p2960593a40472039",
       "name": "Oqs",
-      "ref": "master",
-      "url": "https://github.com/ziranlang/oqs.git"
+      "ref": "22d2ddbdc236796953c905a05a2cebf5ab1b4ff3",
+      "url": "https://git.waozi.xyz/ziranlang/oqs.git"
     },
     {
       "commit": "944826f70779a6b6cd53f6b06a75b36f4d8a2558",
       "dependencies": {},
-      "id": "pc23fbf455e97614d",
+      "id": "p5a3dad3b49e1d33d",
       "name": "crypto",
-      "ref": "master",
-      "url": "https://github.com/ziranlang/crypto.git"
+      "ref": "944826f70779a6b6cd53f6b06a75b36f4d8a2558",
+      "url": "https://git.waozi.xyz/ziranlang/crypto.git"
     },
     {
       "commit": "aeaac6eeb1ac84c1bc4439d9aae5267ef9832ef0",
@@ -29,13 +29,13 @@
     }
   ],
   "root": {
-    "dependencies": {"crypto": "pc23fbf455e97614d", "oqs": "p7098ac9cd92f7e5f"},
-    "dependency_refs": {"crypto": "master", "oqs": "master"},
+    "dependencies": {"crypto": "p5a3dad3b49e1d33d", "oqs": "p2960593a40472039"},
+    "dependency_refs": {"crypto": "944826f70779a6b6cd53f6b06a75b36f4d8a2558", "oqs": "22d2ddbdc236796953c905a05a2cebf5ab1b4ff3"},
     "name": "mesh_client"
   },
   "toolchain": {
     "commit": "9432a110709c4a4f72c4f732fcfc368e15213a54",
     "ref": "9432a110709c4a4f72c4f732fcfc368e15213a54",
-    "url": "https://github.com/ziranlang/ziran.git"
+    "url": "https://git.waozi.xyz/ziranlang/ziran.git"
   }
 }
