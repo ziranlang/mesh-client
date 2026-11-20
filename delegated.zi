@@ -227,13 +227,76 @@ RequestRoute :: (method: string, path: string, query: string) -> bool {
     }
     return false
 }
+
+#scope_export
+TelegramDelegateLaunchPath :: "/api/v1/telegram/launch"
+TelegramDelegateCatalogPath :: "/api/v1/tokens/purchases/telegram/catalog"
+TelegramDelegateBalancePath :: "/api/v1/tokens/purchases/telegram/balance"
+TelegramDelegateInvoicesPath :: "/api/v1/tokens/purchases/telegram/invoices"
+
+TelegramDelegateRequestValid :: (client: DelegateClient, method: string, path: string,
+    query: string, body: string) -> bool {
+    if client.bot_id <= 0 || client.telegram_id <= 0 {
+        return false
+    }
+    if path == TelegramDelegateCatalogPath || path == TelegramDelegateBalancePath {
+        prefix := "app_id="
+        return method == "GET" && body == "" && Namespace(client.app_id) &&
+            query.count > prefix.count && query[:prefix.count] == prefix && query[prefix.count:] == client.app_id
+    }
+    if query != "" {
+        return false
+    }
+    if path == TelegramDelegateLaunchPath || path == TelegramDelegateInvoicesPath {
+        if method != "POST" || body.count > 32768 || !WholeJson(body) {
+            return false
+        }
+        names: [4]string = .["app_id", "init_data", "product_id", "request_id"]
+        positions: [4]s32
+        count := ifx path == TelegramDelegateLaunchPath then 2 else 4
+        app: [65]u8
+        return ObjectFields(body, 0, names[:count], positions[:count]) &&
+            ReadStringText(body, positions[0], app[:]) >= 0 && TextUntilNul(app[:]) == client.app_id
+    }
+    prefix := "/api/v1/tokens/purchases/telegram/invoices/"
+    if body != "" || path.count <= prefix.count || path[:prefix.count] != prefix {
+        return false
+    }
+    id := path[prefix.count:]
+    if method == "GET" {
+        return LowerHex(id, 32)
+    }
+    return method == "POST" && id.count == 39 && id[32:] == "/cancel" && LowerHex(id[:32], 32)
+}
+
+DelegateTelegramStarsAllowed :: (client: DelegateClient) -> bool {
+    if !DelegateClientValid(client) || client.bot_id <= 0 || client.telegram_id <= 0 {
+        return false
+    }
+    grant := client.grant
+    now := CurrentDelegateTime(client)
+    return now > 0 && grant.version == 1 && grant.telegram_stars &&
+        grant.not_before <= now && grant.expires_at > now &&
+        grant.bot_id == client.bot_id && grant.telegram_id == client.telegram_id &&
+        TextUntilNul(grant.account_id[:]) == client.account_id && TextUntilNul(grant.app_id[:]) == client.app_id &&
+        TextUntilNul(grant.grant_id[:]) == client.grant_id && TextUntilNul(grant.client_id[:]) == client.client_id &&
+        TextUntilNul(grant.node_id[:]) == client.node_id && TextUntilNul(grant.audience[:]) == client.audience &&
+        TextUntilNul(grant.signing_key[:]) == client.signing_key &&
+        TextUntilNul(grant.encryption_key[:]) == client.encryption_key
+}
+
 #scope_export
 BuildProofMessage :: (proof: RequestProof, output: []u8) -> bool {
+    return RequestRoute(proof.method, proof.path, proof.query) && BuildBoundProofMessage(proof, output)
+}
+
+#scope_file
+BuildBoundProofMessage :: (proof: RequestProof, output: []u8) -> bool {
     if output.count == 0 || !LowerHex(proof.grant_id, 32) ||
         !LowerHex(proof.session_id, 32) || !LowerHex(proof.account_id, 64) ||
         !Namespace(proof.app_id) || !LowerHex(proof.client_id, 64) ||
         !LowerHex(proof.node_id, 64) || !LineText(proof.audience, 512) ||
-        !LowerHex(proof.challenge, 32) || !RequestRoute(proof.method, proof.path, proof.query) ||
+        !LowerHex(proof.challenge, 32) ||
         !LowerHex(proof.body_sha256, 64) || proof.expires_at <= 0 || !LowerHex(proof.nonce, 32) {
         return false
     }
@@ -258,11 +321,13 @@ BuildProofMessage :: (proof: RequestProof, output: []u8) -> bool {
 }
 #scope_export
 BuildProofHeader :: (proof: RequestProof, signature: string, output: []u8) -> bool {
-    if output.count == 0 || !LowerHex(signature, 128) {
-        return false
-    }
     checked: [2048]u8
-    if !BuildProofMessage(proof, checked[:]) {
+    return BuildProofMessage(proof, checked[:]) && WriteProofHeader(proof, signature, output)
+}
+
+#scope_file
+WriteProofHeader :: (proof: RequestProof, signature: string, output: []u8) -> bool {
+    if output.count == 0 || !LowerHex(signature, 128) {
         return false
     }
     output[0] = 0
@@ -516,6 +581,30 @@ PrepareDelegateHeaders :: (client: DelegateClient, session: *DelegateSession, no
         (method == "GET" && (body != "" || ScopeIndex(client, query[11:query.count], false) < 0)) {
         return cast(AuthResult)AuthResult.AUTH_PAYLOAD_FAILED
     }
+    return PrepareBoundDelegateHeaders(client, session, now, method, path, query, body, proof_header, credential)
+}
+
+#scope_export
+PrepareTelegramDelegateHeaders :: (client: DelegateClient, session: *DelegateSession,
+    method: string, path: string, query: string, body: string,
+    proof_header: []u8, credential: []u8) -> AuthResult {
+    now := CurrentDelegateTime(client)
+    if proof_header.count > 0 { proof_header[0] = 0 }
+    if credential.count > 0 { credential[0] = 0 }
+    if now <= 0 || !SessionValid(client, session, now) || proof_header.count == 0 || credential.count < 46 ||
+        !TelegramDelegateRequestValid(client, method, path, query, body) {
+        return cast(AuthResult)AuthResult.AUTH_PAYLOAD_FAILED
+    }
+    if path != TelegramDelegateLaunchPath && !DelegateTelegramStarsAllowed(client) {
+        return cast(AuthResult)AuthResult.AUTH_FAILED
+    }
+    return PrepareBoundDelegateHeaders(client, session, now, method, path, query, body, proof_header, credential)
+}
+
+#scope_file
+PrepareBoundDelegateHeaders :: (client: DelegateClient, session: *DelegateSession, now: s64,
+    method: string, path: string, query: string, body: string,
+    proof_header: []u8, credential: []u8) -> AuthResult {
     nonce: [33]u8
     digest: [65]u8
     if !client.random(client.random_context, nonce[:]) ||
@@ -543,10 +632,10 @@ PrepareDelegateHeaders :: (client: DelegateClient, session: *DelegateSession, no
     proof.nonce = TextUntilNul(nonce[:])
     message: [2048]u8
     signature: [129]u8
-    if !BuildProofMessage(proof, message[:]) ||
+    if !BuildBoundProofMessage(proof, message[:]) ||
         !client.signer(client.signing_context, TextUntilNul(message[:]), signature[:]) ||
         !LowerHex(TextUntilNul(signature[:]), 128) ||
-        !BuildProofHeader(proof, TextUntilNul(signature[:]), proof_header) ||
+        !WriteProofHeader(proof, TextUntilNul(signature[:]), proof_header) ||
         !DelegateExpiryCurrent(client, proof.expires_at) {
         return cast(AuthResult)AuthResult.AUTH_SIGN_FAILED
     }
@@ -558,6 +647,7 @@ PrepareDelegateHeaders :: (client: DelegateClient, session: *DelegateSession, no
     }
     return cast(AuthResult)AuthResult.AUTH_OK
 }
+
 #scope_export
 RenewDelegateSession :: (client: DelegateClient, session: *DelegateSession,
     now: s64, response: []u8) -> AuthResult {

@@ -34,6 +34,7 @@ Grant :: struct {
     nonce: string
     bot_id: s64
     telegram_id: s64
+    telegram_stars: bool
     scopes: []GrantScope
     signature: string
 }
@@ -62,6 +63,7 @@ GrantStorage :: struct {
     nonce: [33]u8
     bot_id: s64
     telegram_id: s64
+    telegram_stars: bool
     scope_count: s32
     scopes: [16]ScopeStorage
     signature: [4841]u8
@@ -223,7 +225,8 @@ GrantValid :: (grant: Grant, now: s64) -> bool {
         grant.scopes.count < 1 || grant.scopes.count > 16 ||
         grant.bot_id < 0 || grant.telegram_id < 0 ||
         grant.bot_id > 9007199254740991 || grant.telegram_id > 4503599627370495 ||
-        ((grant.bot_id == 0) != (grant.telegram_id == 0)) {
+        ((grant.bot_id == 0) != (grant.telegram_id == 0)) ||
+        (grant.telegram_stars && grant.bot_id == 0) {
         return false
     }
     previous: string = ""
@@ -266,6 +269,7 @@ ViewGrant :: (storage: *GrantStorage, scopes: []GrantScope, grant: *Grant) -> bo
     grant.nonce = TextUntilNul(storage.nonce[:])
     grant.bot_id = storage.bot_id
     grant.telegram_id = storage.telegram_id
+    grant.telegram_stars = storage.telegram_stars
     grant.signature = TextUntilNul(storage.signature[:])
     for index: 0..storage.scope_count - 1 {
         source := *storage.scopes[index]
@@ -323,6 +327,9 @@ BuildGrantMessage :: (grant: Grant, output: []u8) -> bool {
         writer = Line(writer, ifx scope.write then "write" else "")
         writer = Line(writer, scope.key_id)
         writer = Line(writer, TextUntilNul(digest[:]))
+    }
+    if grant.telegram_stars {
+        writer = Line(writer, "telegram-stars-purchases")
     }
     return writer.valid
 }
@@ -396,6 +403,9 @@ BuildGrantBody :: (grant: Grant, output: []u8) -> bool {
         index += 1
     }
     writer = WriteText(writer, "],")
+    if grant.telegram_stars {
+        writer = WriteText(writer, "\"telegram_stars\":true,")
+    }
     writer = JsonTextField(writer, "signature", grant.signature)
     writer = WriteByte(writer, cast(u8)125)
     return writer.valid
@@ -516,13 +526,15 @@ ReadGrantAt :: (json: string, at: s32, storage: *GrantStorage) -> bool {
         return false
     }
     storage.* = GrantStorage.{}
-    names: [18]string = .["version", "account_id", "grant_id", "request_id",
+    names: [19]string = .["version", "account_id", "grant_id", "request_id",
         "app_id", "client_id", "node_id", "audience", "signing_key", "encryption_key",
         "issued_at", "not_before", "expires_at", "nonce", "bot_id", "telegram_id",
-        "scopes", "signature"]
-    positions: [18]s32
+        "scopes", "signature", "telegram_stars"]
+    positions: [19]s32
     version: s64
-    if !ObjectFields(json, at, names[:], positions[:]) ||
+    telegram_stars: bool
+    if !ObjectFieldsMinimum(json, at, names[:], positions[:], 18) ||
+        (positions[18] >= 0 && !ReadBool(json, positions[18], *telegram_stars)) ||
         !ReadInteger(json, positions[0], *version) || version != 1 ||
         ReadStringText(json, positions[1], storage.account_id[:]) < 0 ||
         ReadStringText(json, positions[2], storage.grant_id[:]) < 0 ||
@@ -562,6 +574,7 @@ ReadGrantAt :: (json: string, at: s32, storage: *GrantStorage) -> bool {
         }
     }
     storage.scope_count = count
+    storage.telegram_stars = telegram_stars
     return true
 }
 #scope_export

@@ -4,8 +4,19 @@
 #import "mesh_client/async_client"
 #import "mesh_client/auth"
 #import "mesh_client/url"
+#import "mesh_client/wire"
 #import "net_http"
 #import "text_buffer"
+
+TelegramDelegateOperation :: enum {
+    Unspecified :: 0
+    Launch
+    Catalog
+    Balance
+    CreateInvoice
+    InvoiceStatus
+    CancelInvoice
+}
 
 PendingDelegate :: struct {
     client: DelegateClient
@@ -15,6 +26,10 @@ PendingDelegate :: struct {
     body: string
     output: []u8
     session_only: bool
+    telegram: bool
+    method: string
+    path: [105]u8
+    query: [72]u8
     address: [768]u8
     session_body: [512]u8
     challenge_json: [2048]u8
@@ -31,16 +46,28 @@ FinishDelegate :: (pending: *PendingDelegate, result: AuthResult) {
     pending.waiting = false
     pending.done = true
     pending.result = result
+    if pending.telegram {
+        pending.body = ""
+    }
 }
 StartDelegateTransfer :: (pending: *PendingDelegate, path: string,
-    body: string, output: []u8, stage: s32, headers: []HttpHeader) {
+    body: string, output: []u8, stage: s32, headers: []HttpHeader,
+    method: string = "POST", query: string = "") {
     pending.now = CurrentDelegateTime(pending.client)
     if pending.now <= 0 || output.count == 0 || !JoinUrl(pending.client.server_url, path, pending.address[:]) {
         FinishDelegate(pending, cast(AuthResult)AuthResult.AUTH_PAYLOAD_FAILED)
         return
     }
+    if query != "" {
+        address: Writer = .{pending.address[:], TextUntilNul(pending.address[:]).count, true}
+        address = WriteText(WriteByte(address, cast(u8)63), query)
+        if !address.valid {
+            FinishDelegate(pending, cast(AuthResult)AuthResult.AUTH_INVALID_URL)
+            return
+        }
+    }
     request: HttpRequest
-    request.method = "POST"
+    request.method = method
     request.url = TextUntilNul(pending.address[:])
     request.accept = "application/json"
     request.content_type = "application/json"
@@ -64,24 +91,70 @@ StartDelegateChallenge :: (pending: *PendingDelegate) {
     StartDelegateTransfer(pending, "/api/v1/authorization/challenge",
         TextUntilNul(pending.session_body[:]), pending.challenge_json[:], 1, pending.headers[0:0])
 }
-StartDelegateSync :: (pending: *PendingDelegate) {
-    result := PrepareDelegateHeaders(pending.client, pending.session, pending.now,
-        "POST", "/api/v1/delegated/sync", "", pending.body,
-        pending.proof[:], pending.credential[:])
+StartDelegateRequest :: (pending: *PendingDelegate) {
+    method := "POST"
+    path := "/api/v1/delegated/sync"
+    query := ""
+    result: AuthResult
+    telegram_path := pending.path
+    telegram_query := pending.query
+    if pending.telegram {
+        method = pending.method
+        path = TextUntilNul(telegram_path[:])
+        query = TextUntilNul(telegram_query[:])
+        result = PrepareTelegramDelegateHeaders(pending.client, pending.session, method, path, query,
+            pending.body, pending.proof[:], pending.credential[:])
+    } else {
+        result = PrepareDelegateHeaders(pending.client, pending.session, pending.now, method, path, query,
+            pending.body, pending.proof[:], pending.credential[:])
+    }
     if result != cast(AuthResult)AuthResult.AUTH_OK {
         FinishDelegate(pending, result)
         return
     }
     pending.headers[0].name = "Authorization"
     pending.headers[0].value = TextUntilNul(pending.credential[:])
-    pending.headers[1].name = "X-Daochi-Delegate"
+    pending.headers[1].name = ifx pending.telegram then "X-Mesh-Delegate" else "X-Daochi-Delegate"
     pending.headers[1].value = TextUntilNul(pending.proof[:])
-    StartDelegateTransfer(pending, "/api/v1/delegated/sync", pending.body,
-        pending.output, 3, pending.headers[:])
+    StartDelegateTransfer(pending, path, pending.body, pending.output, 3, pending.headers[:], method, query)
 }
+
+ConfigureTelegramRequest :: (pending: *PendingDelegate, operation: TelegramDelegateOperation,
+    invoice_id: string) -> bool {
+    invoice := operation == .InvoiceStatus || operation == .CancelInvoice
+    if (invoice && !LowerHex(invoice_id, 32)) || (!invoice && invoice_id != "") {
+        return false
+    }
+    path: Writer = .{pending.path[:], 0, true}
+    query: Writer = .{pending.query[:], 0, true}
+    pending.method = "POST"
+    if operation == .Launch {
+        path = WriteText(path, TelegramDelegateLaunchPath)
+    } else if operation == .Catalog || operation == .Balance {
+        pending.method = "GET"
+        path = WriteText(path, ifx operation == .Catalog then TelegramDelegateCatalogPath else TelegramDelegateBalancePath)
+        query = WriteText(WriteText(query, "app_id="), pending.client.app_id)
+    } else if operation == .CreateInvoice || invoice {
+        path = WriteText(path, TelegramDelegateInvoicesPath)
+        if invoice {
+            path = WriteText(WriteByte(path, cast(u8)47), invoice_id)
+            if operation == .CancelInvoice {
+                path = WriteText(path, "/cancel")
+            } else {
+                pending.method = "GET"
+            }
+        }
+    } else {
+        return false
+    }
+    return path.valid && query.valid && TelegramDelegateRequestValid(pending.client, pending.method,
+        TextUntilNul(pending.path[:]), TextUntilNul(pending.query[:]), pending.body)
+}
+
 InitializeDelegate :: (pending: *PendingDelegate, client: DelegateClient,
     session: *DelegateSession, now: s64, transport: AsyncTransport,
-    output: []u8, session_only: bool, body: string) -> bool {
+    output: []u8, session_only: bool, body: string,
+    operation: TelegramDelegateOperation = .Unspecified, invoice_id: string = "") -> bool {
     if pending == null || session == null || pending.waiting ||
         transport.start == null || transport.poll == null || transport.cancel == null {
         return false
@@ -95,7 +168,10 @@ InitializeDelegate :: (pending: *PendingDelegate, client: DelegateClient,
     pending.output = output
     pending.session_only = session_only
     pending.body = body
-    if pending.now <= 0 || !DelegateClientValid(client) || output.count < 8192 || (!session_only && body.count == 0) {
+    pending.telegram = operation != .Unspecified
+    if pending.now <= 0 || !DelegateClientValid(client) || output.count < 8192 ||
+        (pending.telegram && !ConfigureTelegramRequest(pending, operation, invoice_id)) ||
+        (!pending.telegram && !session_only && body.count == 0) {
         FinishDelegate(pending, cast(AuthResult)AuthResult.AUTH_PAYLOAD_FAILED)
         return true
     }
@@ -103,7 +179,7 @@ InitializeDelegate :: (pending: *PendingDelegate, client: DelegateClient,
         if session_only {
             FinishDelegate(pending, cast(AuthResult)AuthResult.AUTH_OK)
         } else {
-            StartDelegateSync(pending)
+            StartDelegateRequest(pending)
         }
     } else {
         StartDelegateChallenge(pending)
@@ -120,6 +196,14 @@ BeginDelegateRequest :: (pending: *PendingDelegate, client: DelegateClient,
     body: string, output: []u8) -> bool {
     return InitializeDelegate(pending, client, session, now, transport, output, false, body)
 }
+
+BeginTelegramDelegateRequest :: (pending: *PendingDelegate, client: DelegateClient,
+    session: *DelegateSession, transport: AsyncTransport, operation: TelegramDelegateOperation,
+    invoice_id: string, body: string, output: []u8) -> bool {
+    return operation != .Unspecified && InitializeDelegate(pending, client, session,
+        0, transport, output, false, body, operation, invoice_id)
+}
+
 PollDelegate :: (pending: *PendingDelegate) -> bool {
     if pending == null || pending.done {
         return true
@@ -163,14 +247,14 @@ PollDelegate :: (pending: *PendingDelegate) -> bool {
             FinishDelegate(pending, result)
             return true
         }
-        StartDelegateSync(pending)
+        StartDelegateRequest(pending)
     } else if pending.stage == 3 {
         if pending.status == 401 || pending.status == 403 {
             ClearDelegateSession(pending.session)
             FinishDelegate(pending, cast(AuthResult)AuthResult.AUTH_FAILED)
         } else if pending.status < 200 || pending.status >= 300 {
             FinishDelegate(pending, cast(AuthResult)AuthResult.AUTH_REQUEST_FAILED)
-        } else if !ResponseMatchesRequest(pending.client, pending.body, TextUntilNul(pending.output)) {
+        } else if !pending.telegram && !ResponseMatchesRequest(pending.client, pending.body, TextUntilNul(pending.output)) {
             FinishDelegate(pending, cast(AuthResult)AuthResult.AUTH_PAYLOAD_FAILED)
         } else {
             FinishDelegate(pending, cast(AuthResult)AuthResult.AUTH_OK)

@@ -24,6 +24,28 @@ static bool active, failed_transport;
 static int64_t clock_now = 1791400000;
 static int64_t server_advance, challenge_delivery_delay, session_delivery_delay, sign_advance;
 static bool dynamic_timing;
+
+typedef struct {
+    TelegramDelegateOperation operation;
+    const char *method, *path, *query, *invoice_id, *body;
+    int32_t status;
+} TelegramRequestCase;
+
+static const TelegramRequestCase telegram_cases[] = {
+    {TelegramDelegateOperation_Launch, "POST", "/api/v1/telegram/launch", "", "",
+        "{\"app_id\":\"inbe\",\"init_data\":\"synthetic\"}", 200},
+    {TelegramDelegateOperation_Catalog, "GET", "/api/v1/tokens/purchases/telegram/catalog", "app_id=inbe", "", "", 200},
+    {TelegramDelegateOperation_Balance, "GET", "/api/v1/tokens/purchases/telegram/balance", "app_id=inbe", "", "", 200},
+    {TelegramDelegateOperation_CreateInvoice, "POST", "/api/v1/tokens/purchases/telegram/invoices", "", "",
+        "{\"app_id\":\"inbe\",\"init_data\":\"synthetic\",\"product_id\":\"dew_10\",\"request_id\":\"test-order\"}", 201},
+    {TelegramDelegateOperation_InvoiceStatus, "GET", "/api/v1/tokens/purchases/telegram/invoices/0123456789abcdef0123456789abcdef",
+        "", "0123456789abcdef0123456789abcdef", "", 200},
+    {TelegramDelegateOperation_CancelInvoice, "POST", "/api/v1/tokens/purchases/telegram/invoices/0123456789abcdef0123456789abcdef/cancel",
+        "", "0123456789abcdef0123456789abcdef", "", 200},
+};
+
+static const TelegramRequestCase *expected_telegram_request;
+static char telegram_signed_message[2048];
 static int64_t current_time(void *context)
 {
     (void)context;
@@ -88,6 +110,10 @@ static bool sign_delegate(void *context, String message, Slice output)
     if (StringEqual(message, text(expected_session_message))) {
         copy_output(output, session_signature);
     } else {
+        if (expected_telegram_request && message.length < sizeof telegram_signed_message) {
+            memcpy(telegram_signed_message, message.data, message.length);
+            telegram_signed_message[message.length] = 0;
+        }
         clock_now += sign_advance;
         memset(output.data, 'a', 128);
         ((char *)output.data)[128] = 0;
@@ -150,6 +176,54 @@ static bool start(void *context, HttpRequest request, Slice output)
     return true;
 }
 
+static bool start_telegram(void *context, HttpRequest request, Slice output)
+{
+    const TelegramRequestCase *expected = expected_telegram_request;
+    assert(expected);
+    if (strstr(request.url.data, "/api/v1/authorization/")) {
+        return start(context, request, output);
+    }
+    DelegateClient *linked = context;
+    assert(!active && request.token.length == 0 && request.headers.length == 2);
+    assert(StringEqual(request.method, text(expected->method)) && StringEqual(request.body, text(expected->body)));
+    char url[768];
+    int length = snprintf(url, sizeof url, "%.*s%s%s%s", (int)linked->audience.length, linked->audience.data,
+        expected->path, *expected->query ? "?" : "", expected->query);
+    assert(length > 0 && length < (int)sizeof url && StringEqual(request.url, text(url)));
+    HttpHeader *headers = request.headers.data;
+    assert(StringEqual(headers[0].name, text("Authorization")) && headers[0].value.length == 45);
+    assert(strncmp(headers[0].value.data, "Delegate ds1.", 13) == 0);
+    assert(StringEqual(headers[1].name, text("X-Mesh-Delegate")));
+    String proof = headers[1].value;
+    char method[8], path[105], query[72], digest[65], computed[65], nonce[33], challenge[33];
+    field(proof, "method", method, sizeof method);
+    field(proof, "path", path, sizeof path);
+    field(proof, "query", query, sizeof query);
+    field(proof, "body_sha256", digest, sizeof digest);
+    field(proof, "nonce", nonce, sizeof nonce);
+    field(proof, "challenge", challenge, sizeof challenge);
+    Sha256Hex((uint8_t *)expected->body, strlen(expected->body), (uint8_t *)computed);
+    assert(strcmp(method, expected->method) == 0 && strcmp(path, expected->path) == 0 && strcmp(query, expected->query) == 0);
+    assert(strcmp(digest, computed) == 0);
+    int64_t expires;
+    assert(MESH_AUTHORIZATION_SYMBOL(ReadInteger)(proof, FieldAt(proof, 0, text("expires_at")), &expires));
+    assert(expires > clock_now && expires <= clock_now + 60);
+    char canonical[2048];
+    length = snprintf(canonical, sizeof canonical,
+        "daochi-delegate-request-v1\n1\n%s\n%.32s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%lld\n%s\n",
+        (char *)linked->grant->grant_id, headers[0].value.data + 13, (char *)linked->grant->account_id,
+        (char *)linked->grant->app_id, (char *)linked->grant->client_id, (char *)linked->grant->node_id,
+        (char *)linked->grant->audience, challenge,
+        method, path, query, digest, (long long)expires, nonce);
+    assert(length > 0 && length < (int)sizeof canonical && strcmp(canonical, telegram_signed_message) == 0);
+    active = true;
+    transfers++;
+    polls = 0;
+    stage = 3;
+    copy_output(output, "{\"fixture\":true}");
+    return true;
+}
+
 static int32_t poll(void *context, int32_t *status)
 {
     (void)context;
@@ -192,6 +266,11 @@ static bool start_async(void *closure, void *context, HttpRequest request, Slice
 {
     (void)closure;
     return start(context, request, output);
+}
+static bool start_telegram_async(void *closure, void *context, HttpRequest request, Slice output)
+{
+    (void)closure;
+    return start_telegram(context, request, output);
 }
 static int32_t poll_async(void *closure, void *context, int32_t *status)
 {
@@ -589,6 +668,70 @@ static void check_advancing_clock(void)
     dynamic_timing = false;
 }
 
+static void check_telegram_async(DelegateClient *linked, DelegateSession *session, bool stars)
+{
+    PendingDelegate pending = {0};
+    AsyncTransport transport = {.context = linked, .start = {.call = start_telegram_async},
+        .poll = {.call = poll_async}, .cancel = {.call = cancel_async}};
+    char output[18000], proof[4096] = "previous", credential[46] = "previous";
+    assert(MESH_DELEGATED_SYMBOL(DelegateTelegramStarsAllowed)(*linked) == stars);
+    for (size_t i = 0; i < sizeof telegram_cases / sizeof telegram_cases[0]; i++) {
+        const TelegramRequestCase *test = &telegram_cases[i];
+        expected_telegram_request = test;
+        response_status = test->status;
+        int before = transfers;
+        assert(MESH_ASYNC_DELEGATED_SYMBOL(BeginTelegramDelegateRequest)(&pending, *linked, session, transport,
+            test->operation, text(test->invoice_id), text(test->body), bytes(output, sizeof output)));
+        if (stars || test->operation == TelegramDelegateOperation_Launch) {
+            assert(!MESH_ASYNC_DELEGATED_SYMBOL(PollDelegate)(&pending));
+            assert(MESH_ASYNC_DELEGATED_SYMBOL(PollDelegate)(&pending));
+            assert(pending.result == AuthResult_AUTH_OK && pending.status == test->status && transfers == before + 1);
+            assert(strcmp(output, "{\"fixture\":true}") == 0 && pending.body.length == 0);
+        } else {
+            assert(MESH_ASYNC_DELEGATED_SYMBOL(PollDelegate)(&pending));
+            assert(pending.result == AuthResult_AUTH_FAILED && transfers == before);
+        }
+    }
+    assert(MESH_DELEGATED_SYMBOL(PrepareDelegateHeaders)(*linked, session, 0, text("GET"), text(telegram_cases[2].path),
+        text("app_id=inbe"), text(""), bytes(proof, sizeof proof), bytes(credential, sizeof credential)) != AuthResult_AUTH_OK);
+    const char *bad[][4] = {
+        {"POST", "/api/v1/tokens/purchases/telegram/balance", "app_id=inbe", ""},
+        {"GET", "/api/v1/tokens/purchases/telegram/balance", "app_id=other", ""},
+        {"GET", "/api/v1/tokens/purchases/telegram/balance", "app_id=inbe&app_id=inbe", ""},
+        {"GET", "/api/v1/tokens/balance", "app_id=inbe", ""},
+        {"POST", "/api/v1/tokens/purchases/telegram/invoices/0123456789abcdef0123456789abcdef", "", ""},
+        {"GET", "/api/v1/tokens/purchases/telegram/invoices/0123456789abcdef0123456789abcdef/cancel", "", ""},
+        {"POST", "/api/v1/telegram/launch", "", "{\"app_id\":\"other\",\"init_data\":\"synthetic\"}"},
+    };
+    for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+        assert(MESH_DELEGATED_SYMBOL(PrepareTelegramDelegateHeaders)(*linked, session, text(bad[i][0]), text(bad[i][1]),
+            text(bad[i][2]), text(bad[i][3]), bytes(proof, sizeof proof), bytes(credential, sizeof credential)) == AuthResult_AUTH_PAYLOAD_FAILED);
+        assert(!proof[0] && !credential[0]);
+    }
+    if (stars) {
+        expected_telegram_request = &telegram_cases[2];
+        assert(MESH_ASYNC_DELEGATED_SYMBOL(BeginTelegramDelegateRequest)(&pending, *linked, session, transport,
+            TelegramDelegateOperation_Balance, text(""), text(""), bytes(output, sizeof output)));
+        int previous_cancels = cancels;
+        MESH_ASYNC_DELEGATED_SYMBOL(CancelDelegate)(&pending);
+        MESH_ASYNC_DELEGATED_SYMBOL(CancelDelegate)(&pending);
+        assert(!active && cancels == previous_cancels + 1 && pending.result == AuthResult_AUTH_REQUEST_FAILED);
+        failed_transport = true;
+        assert(MESH_ASYNC_DELEGATED_SYMBOL(BeginTelegramDelegateRequest)(&pending, *linked, session, transport,
+            TelegramDelegateOperation_Balance, text(""), text(""), bytes(output, sizeof output)));
+        assert(!MESH_ASYNC_DELEGATED_SYMBOL(PollDelegate)(&pending));
+        assert(MESH_ASYNC_DELEGATED_SYMBOL(PollDelegate)(&pending) && pending.result == AuthResult_AUTH_REQUEST_FAILED);
+        failed_transport = false;
+        response_status = 403;
+        assert(MESH_ASYNC_DELEGATED_SYMBOL(BeginTelegramDelegateRequest)(&pending, *linked, session, transport,
+            TelegramDelegateOperation_Balance, text(""), text(""), bytes(output, sizeof output)));
+        assert(!MESH_ASYNC_DELEGATED_SYMBOL(PollDelegate)(&pending));
+        assert(MESH_ASYNC_DELEGATED_SYMBOL(PollDelegate)(&pending));
+        assert(pending.status == 403 && pending.result == AuthResult_AUTH_FAILED && !session->session_id[0]);
+    }
+    expected_telegram_request = NULL;
+}
+
 static void check_telegram_binding(String document)
 {
     AccountKeys owner;
@@ -616,6 +759,74 @@ static void check_telegram_binding(String document)
     DelegateSession session;
     assert(MESH_DELEGATED_SYMBOL(AcceptSessionAnswer)(telegram, 200, text(telegram_answer), 1,
         &session) == AuthResult_AUTH_OK);
+    assert(!telegram.grant->telegram_stars);
+    check_telegram_async(&telegram, &session, false);
+
+    char explicit_false[18000];
+    count = snprintf(explicit_false, sizeof explicit_false,
+        "{\"credential\":%.*s,\"grant\":%.*s,\"telegram_stars\":false},\"owner_public_key\":\"%s\"}",
+        (int)credential.length, credential.data, (int)strlen(grant_json) - 1, grant_json, owner.public_key_hex);
+    assert(count > 0 && count < (int)sizeof explicit_false);
+    assert(MESH_DELEGATED_SYMBOL(AcceptSessionAnswer)(telegram, 200, text(explicit_false), 1,
+        &session) == AuthResult_AUTH_OK && !telegram.grant->telegram_stars);
+
+    grant.telegram_stars = true;
+    char extended_message[8192];
+    assert(MESH_AUTHORIZATION_SYMBOL(BuildGrantMessage)(grant, bytes(extended_message, sizeof extended_message)));
+    assert(strncmp(message, extended_message, strlen(message)) == 0);
+    assert(strcmp(extended_message + strlen(message), "telegram-stars-purchases\n") == 0);
+    assert(!MESH_AUTHORIZATION_SYMBOL(VerifyGrantSignature)(grant, text((char *)owner.public_key_hex), clock_now));
+    Client approval = {.app_id = grant.app_id, .identity = {.account_id = grant.account_id, .signing_context = &owner},
+        .signer = SignAccountMessage};
+    assert(MESH_AUTHORIZATION_OWNER_SYMBOL(PrepareGrantApproval)(approval, grant, bytes(grant_json, sizeof grant_json)) == AuthResult_AUTH_OK);
+    assert(strstr(grant_json, "\"telegram_stars\":true"));
+    count = snprintf(telegram_answer, sizeof telegram_answer,
+        "{\"credential\":%.*s,\"grant\":%s,\"owner_public_key\":\"%s\"}",
+        (int)credential.length, credential.data, grant_json, owner.public_key_hex);
+    assert(count > 0 && count < (int)sizeof telegram_answer);
+    char edited_answer[18000];
+    strcpy(edited_answer, telegram_answer);
+    char *modified_flag = strstr(edited_answer, "\"telegram_stars\":true");
+    assert(modified_flag);
+    memcpy(strchr(modified_flag, ':') + 1, "null", 4);
+    assert(MESH_DELEGATED_SYMBOL(AcceptSessionAnswer)(telegram, 200, text(edited_answer), 1,
+        &session) == AuthResult_AUTH_PAYLOAD_FAILED);
+    memcpy(strchr(modified_flag, ':') + 1, "0   ", 4);
+    assert(MESH_DELEGATED_SYMBOL(AcceptSessionAnswer)(telegram, 200, text(edited_answer), 1,
+        &session) == AuthResult_AUTH_PAYLOAD_FAILED);
+    memcpy(strchr(modified_flag, ':') + 1, "true", 4);
+    char *next_field = strchr(strchr(modified_flag, ':') + 1, ',');
+    const char duplicate[] = ",\"telegram_\\u0073tars\":false";
+    memmove(next_field + sizeof duplicate - 1, next_field, strlen(next_field) + 1);
+    memcpy(next_field, duplicate, sizeof duplicate - 1);
+    assert(MESH_DELEGATED_SYMBOL(AcceptSessionAnswer)(telegram, 200, text(edited_answer), 1,
+        &session) == AuthResult_AUTH_PAYLOAD_FAILED);
+    assert(MESH_DELEGATED_SYMBOL(AcceptSessionAnswer)(telegram, 200, text(telegram_answer), 1,
+        &session) == AuthResult_AUTH_OK);
+    assert(telegram.grant->telegram_stars);
+    check_telegram_async(&telegram, &session, true);
+
+    strcpy(answer, telegram_answer);
+    char output[18000];
+    PendingDelegate pending = {0};
+    AsyncTransport transport = {.context = &telegram, .start = {.call = start_telegram_async},
+        .poll = {.call = poll_async}, .cancel = {.call = cancel_async}};
+    expected_telegram_request = &telegram_cases[2];
+    response_status = 200;
+    int before = transfers;
+    assert(!session.session_id[0]);
+    assert(MESH_ASYNC_DELEGATED_SYMBOL(BeginTelegramDelegateRequest)(&pending, telegram, &session, transport,
+        TelegramDelegateOperation_Balance, text(""), text(""), bytes(output, sizeof output)));
+    for (int i = 0; i < 9 && !pending.done; i++) {
+        MESH_ASYNC_DELEGATED_SYMBOL(PollDelegate)(&pending);
+    }
+    assert(pending.done && pending.result == AuthResult_AUTH_OK && transfers == before + 3);
+    expected_telegram_request = NULL;
+
+    int64_t previous_clock = clock_now;
+    clock_now = telegram.grant->expires_at;
+    assert(!MESH_DELEGATED_SYMBOL(DelegateTelegramStarsAllowed)(telegram));
+    clock_now = previous_clock;
     telegram.bot_id = 123457;
     assert(MESH_DELEGATED_SYMBOL(AcceptSessionAnswer)(telegram, 200, text(telegram_answer), 1,
         &session) == AuthResult_AUTH_FAILED);

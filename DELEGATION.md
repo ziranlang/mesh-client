@@ -61,7 +61,50 @@ can renew an expired session before its first mutation, and holds all request
 buffers until polling completes or its owned transfer is cancelled.
 
 This is a custom Mesh wire protocol using sender-bound proof and replay
-principles, not OAuth DPoP. Server revocation, current app visibility/status and
-issuing-node checks remain authoritative on every request. Grants do not authorize
-other nodes, grant chaining, exports, deletion, payments or owner routes. Revocation
-blocks future access; it cannot erase already received keys or plaintext.
+principles. Server revocation, current app visibility/status and issuing-node
+checks remain authoritative on every request. Each grant applies to its issuing
+node, exact scopes and expressly approved capabilities. Revocation blocks
+future access. Keys and plaintext already received remain with the recipient.
+
+## Telegram Mini App purchases
+
+The owner may explicitly approve Telegram Stars purchases and a read-only Dew
+balance for the same linked account and app. Set `Grant.telegram_stars` on the
+Telegram-linked grant before calling the existing `PrepareGrantApproval`.
+The canonical message gains exactly one `telegram-stars-purchases` line ending
+in LF after the last collection scope, and the body gains `telegram_stars:true`.
+A grant without that permission keeps its original bytes. `AcceptSessionAnswer`
+verifies the owner signature before storing the flag. Read the installed grant
+via `GrantStorage` or call `DelegateTelegramStarsAllowed` for a local permission
+and expiry check. The issuer verifies current policy when handling each request.
+
+Call `BeginTelegramDelegateRequest` from `mesh_client/async_delegated` with
+a `PendingDelegate`, the linked `DelegateClient`, its `DelegateSession`, and an
+`AsyncTransport`. The operation selects the exact route and method.
+
+| Operation | `invoice_id` | Body |
+| --- | --- | --- |
+| `.Launch` | Empty | `{app_id, init_data}` |
+| `.Catalog`, `.Balance` | Empty | Empty |
+| `.CreateInvoice` | Empty | `{app_id, init_data, product_id, request_id}` |
+| `.InvoiceStatus`, `.CancelInvoice` | Issuer's 32-digit lowercase hex invoice ID | Empty |
+
+The bound app ID determines the `app_id=APP` query on catalog and balance.
+The client signs the exact permitted request with `Authorization: Delegate
+ds1.<session_id>` and the JSON `X-Mesh-Delegate` proof. Empty bodies use the SHA-256
+digest of zero bytes. Hosts that already have a valid session may use
+`PrepareTelegramDelegateHeaders` with the same exact method, path, query and body.
+The existing `PrepareDelegateHeaders` continues to sign sync and scoped WebSocket
+requests. A linked Lumi-only grant can verify launch. Catalog, balance and all
+invoice operations require the Stars permission. The issuer binds invoice status
+and cancellation to the authenticated purchaser.
+
+Use `PollDelegate` and read `pending.result` and `pending.status` on completion.
+The host provides a response buffer of at least 8192 bytes with enough space to
+hold the full signed grant response when renewal is needed. Keep request and
+response buffers alive through completion or cancellation. Parse successful
+responses with the Entity Mini App contract. `CancelDelegate` releases the
+local transfer. Use `.CancelInvoice` for intentional issuer cancellation. Keep
+raw Telegram `initData` and request credentials in memory, and exclude them
+from logs and persistent storage. A browser `invoiceClosed` callback can trigger
+a status read. The issuer alone settles purchases and refunds.
