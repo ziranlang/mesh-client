@@ -34,8 +34,8 @@
     "name": "mesh_client"
   },
   "toolchain": {
-    "commit": "ee86330414a2febb0135d86506b505af5e6a660b",
-    "ref": "master",
+    "commit": "9432a110709c4a4f72c4f732fcfc368e15213a54",
+    "ref": "9432a110709c4a4f72c4f732fcfc368e15213a54",
     "url": "https://github.com/ziranlang/ziran.git"
   }
 }
