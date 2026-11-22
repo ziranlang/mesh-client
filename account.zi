@@ -59,7 +59,7 @@ PrepareDelete :: (client: Client, challenge: string,
 
 #scope_export
 #program_export
-DeleteAccount :: (client: Client) -> AuthResult {
+DeleteAccountWithTwoFactor :: (client: Client, two_factor_code: string) -> AuthResult {
     challenge: [4096]u8
     challenged := FetchChallengeJson(client, challenge[:])
     if challenged != cast(AuthResult)AuthResult.AUTH_OK {
@@ -79,29 +79,118 @@ DeleteAccount :: (client: Client) -> AuthResult {
             "/api/v1/account/delete", url[:]) {
         return cast(AuthResult)AuthResult.AUTH_INVALID_URL
     }
-    headers: [2]HttpHeader
+    headers: [3]HttpHeader
     headers[0].name = "X-Mesh-User"
     headers[0].value = client.identity.account_id
     headers[1].name = "X-Mesh-Signature"
     headers[1].value = TextUntilNul(signature[:])
+    header_count: s64 = 2
+    if two_factor_code.count > 0 {
+        headers[2].name = "X-Mesh-2FA"
+        headers[2].value = two_factor_code
+        header_count = 3
+    }
     request: HttpRequest
     request.method = "POST"
     request.url = TextUntilNul(url[:])
     request.content_type = "application/json"
     request.accept = "application/json"
     request.body = TextUntilNul(body[:])
-    request.headers = headers[:]
+    request.headers = headers[0:header_count]
     response: [4096]u8
     status: s32 = 0
     if !client.send(client.transport_context, request,
         response[:], *status) {
         return cast(AuthResult)AuthResult.AUTH_REQUEST_FAILED
     }
-    if status == 401 || status == 403 {
+    if status == 401 {
+        err_text: [64]u8
+        if FieldText(TextUntilNul(response[:]), "error", err_text[:]) &&
+            TextUntilNul(err_text[:]) == "2fa_required" {
+            return cast(AuthResult)AuthResult.AUTH_2FA_REQUIRED
+        }
+        return cast(AuthResult)AuthResult.AUTH_FAILED
+    }
+    if status == 403 {
         return cast(AuthResult)AuthResult.AUTH_FAILED
     }
     if status < 200 || status >= 300 {
         return cast(AuthResult)AuthResult.AUTH_REQUEST_FAILED
     }
     return cast(AuthResult)AuthResult.AUTH_OK
+}
+
+#scope_export
+#program_export
+DeleteAccount :: (client: Client) -> AuthResult {
+    return DeleteAccountWithTwoFactor(client, "")
+}
+
+#scope_export
+#program_export
+BuildTwoFactorActionBody :: (code: string, revoke_other_sessions: bool, output: []u8) -> bool {
+    if output.count == 0 { return false }
+    output[0] = cast(u8)0
+    writer: Writer = Writer.{output, 0, true}
+    writer = WriteText(writer, "{\"code\":")
+    writer = AppendJsonQuoted(writer, code)
+    if revoke_other_sessions {
+        writer = WriteText(writer, ",\"revoke_other_sessions\":true")
+    }
+    writer = WriteByte(writer, cast(u8)125)
+    if !writer.valid {
+        output[0] = cast(u8)0
+        return false
+    }
+    return true
+}
+
+#scope_export
+#program_export
+GetTwoFactorStatus :: (client: Client, session: *Session, now: s64,
+    output: []u8, status: *s32) -> AuthResult {
+    return BearerRequest(client, session, now, "GET", "/api/v1/account/2fa", "", output, status)
+}
+
+#scope_export
+#program_export
+SetupTwoFactorTotp :: (client: Client, session: *Session, now: s64,
+    output: []u8, status: *s32) -> AuthResult {
+    return BearerRequest(client, session, now, "POST", "/api/v1/account/2fa/totp/setup", "{}", output, status)
+}
+
+#scope_export
+#program_export
+ConfirmTwoFactorTotp :: (client: Client, session: *Session, now: s64,
+    code: string, revoke_other_sessions: bool, output: []u8, status: *s32) -> AuthResult {
+    body: [256]u8
+    if !BuildTwoFactorActionBody(code, revoke_other_sessions, body[:]) {
+        return cast(AuthResult)AuthResult.AUTH_PAYLOAD_FAILED
+    }
+    return BearerRequest(client, session, now, "POST", "/api/v1/account/2fa/totp/confirm",
+        TextUntilNul(body[:]), output, status)
+}
+
+#scope_export
+#program_export
+DisableTwoFactor :: (client: Client, session: *Session, now: s64,
+    code: string, revoke_other_sessions: bool, output: []u8, status: *s32) -> AuthResult {
+    body: [256]u8
+    if !BuildTwoFactorActionBody(code, revoke_other_sessions, body[:]) {
+        return cast(AuthResult)AuthResult.AUTH_PAYLOAD_FAILED
+    }
+    return BearerRequest(client, session, now, "POST", "/api/v1/account/2fa/disable",
+        TextUntilNul(body[:]), output, status)
+}
+
+#scope_export
+#program_export
+RegenerateTwoFactorRecovery :: (client: Client, session: *Session, now: s64,
+    code: string, output: []u8, status: *s32) -> AuthResult {
+    body: [256]u8
+    if !BuildTwoFactorActionBody(code, false, body[:]) {
+        return cast(AuthResult)AuthResult.AUTH_PAYLOAD_FAILED
+    }
+    return BearerRequest(client, session, now, "POST", "/api/v1/account/2fa/recovery/regenerate",
+        TextUntilNul(body[:]), output, status)
 }

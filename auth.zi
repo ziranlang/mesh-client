@@ -13,6 +13,7 @@ AuthResult :: enum {
     AUTH_SIGN_FAILED :: 5
     AUTH_REQUEST_FAILED :: 6
     AUTH_FAILED :: 7
+    AUTH_2FA_REQUIRED :: 8
 }
 
 using AuthResult;
@@ -179,6 +180,11 @@ AcceptLogin :: (status: s32, response_json: string,
     }
     session.* = Session.{}
     if status == 401 {
+        err_text: [64]u8
+        if FieldText(response_json, "error", err_text[:]) &&
+            TextUntilNul(err_text[:]) == "2fa_required" {
+            return cast(AuthResult)AUTH_2FA_REQUIRED
+        }
         return cast(AuthResult)AUTH_FAILED
     }
     if status < 200 || status >= 300 {

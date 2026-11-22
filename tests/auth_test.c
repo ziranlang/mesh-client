@@ -83,6 +83,9 @@ int main(void)
     result = AcceptLogin(401, StringLiteral("{}"), &session);
     assert(result == AuthResult_AUTH_FAILED);
     assert(session.token[0] == 0);
+    result = AcceptLogin(401, StringLiteral("{\"error\":\"2fa_required\",\"methods\":[\"totp\"]}"), &session);
+    assert(result == AuthResult_AUTH_2FA_REQUIRED);
+    assert(session.token[0] == 0);
     result = AcceptLogin(200, StringLiteral("{}"), &session);
     assert(result == AuthResult_AUTH_PAYLOAD_FAILED);
     puts("Mesh Ziran login protocol passed");

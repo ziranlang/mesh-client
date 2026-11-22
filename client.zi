@@ -55,7 +55,7 @@ FetchChallengeJson :: (client: Client, output: []u8) -> AuthResult {
 
 #scope_export
 #program_export
-Login :: (client: Client, session: *Session) -> AuthResult {
+LoginWithTwoFactor :: (client: Client, two_factor_code: string, session: *Session) -> AuthResult {
     if session == null {
         return cast(AuthResult)AuthResult.AUTH_PAYLOAD_FAILED
     }
@@ -85,17 +85,23 @@ Login :: (client: Client, session: *Session) -> AuthResult {
     }
 
     request: HttpRequest
-    headers: [2]HttpHeader
+    headers: [3]HttpHeader
     headers[0].name = "X-Mesh-User"
     headers[0].value = client.identity.account_id
     headers[1].name = "X-Mesh-Signature"
     headers[1].value = TextUntilNul(signature[:])
+    header_count: s64 = 2
+    if two_factor_code.count > 0 {
+        headers[2].name = "X-Mesh-2FA"
+        headers[2].value = two_factor_code
+        header_count = 3
+    }
     request.method = "POST"
     request.url = TextUntilNul(url[:])
     request.accept = "application/json"
     request.content_type = "application/json"
     request.body = TextUntilNul(body[:])
-    request.headers = headers[:]
+    request.headers = headers[0:header_count]
     response: [8192]u8
     status: s32 = 0
     if !client.send(client.transport_context, request,
@@ -103,6 +109,12 @@ Login :: (client: Client, session: *Session) -> AuthResult {
         return cast(AuthResult)AuthResult.AUTH_REQUEST_FAILED
     }
     return AcceptLogin(status, TextUntilNul(response[:]), session)
+}
+
+#scope_export
+#program_export
+Login :: (client: Client, session: *Session) -> AuthResult {
+    return LoginWithTwoFactor(client, "", session)
 }
 
 MethodValid :: (method: string) -> bool {
