@@ -1,0 +1,247 @@
+// Native memory-hard (Argon2id) account key file export/import for
+// mesh-account-key-v3, backed by crypto/native (libsodium).
+// Uses Argon2id (64 MiB RAM, 3 iterations by default), full 16-byte random
+// salt, XChaCha20-Poly1305 (24-byte random nonce), and full header AAD.
+// Link libsodium when importing this module.
+#scope_module
+Keys :: #import "mesh_client/keys";
+Crypto :: #import "mesh_client/crypto";
+Native :: #import "crypto/native";
+#import "byte_text_linux"
+
+#scope_file
+ARGON2_DEFAULT_OPS :: 3
+ARGON2_DEFAULT_MEM :: 67108864 // 64 MiB
+ARGON2_MIN_MEM :: 8192
+ARGON2_MAX_MEM :: 1073741824 // 1 GiB
+ARGON2_MAX_OPS :: 100
+
+StartsWith :: (value: string, prefix: string) -> bool {
+    if value.count < prefix.count { return false }
+    for index: cast(s64)0..prefix.count - 1 {
+        if value[index] != prefix[index] { return false }
+    }
+    return true
+}
+
+TrimValue :: (value: string) -> string {
+    start: s64 = 0
+    finish: s64 = value.count
+    while start < finish && (value[start] == 32 || value[start] == 9) { start += 1 }
+    while finish > start && (value[finish - 1] == 32 || value[finish - 1] == 9 || value[finish - 1] == 13) {
+        finish -= 1
+    }
+    return value[start:finish]
+}
+
+LineValue :: (body: string, prefix: string) -> string {
+    cursor: s64 = 0
+    while cursor < body.count {
+        finish := cursor
+        while finish < body.count && body[finish] != 10 { finish += 1 }
+        line := body[cursor:finish]
+        if StartsWith(line, prefix) {
+            return TrimValue(line[prefix.count:line.count])
+        }
+        cursor = finish + 1
+    }
+    return ""
+}
+
+ParseU64 :: (text: string, maximum: u64) -> u64 {
+    if text.count == 0 { return 0 }
+    value: u64 = 0
+    for byte: text {
+        if byte < 48 || byte > 57 { return 0 }
+        digit := cast(u64)(byte - 48)
+        if value > (maximum - digit) / 10 { return 0 }
+        value = value * 10 + digit
+    }
+    return value
+}
+
+AppendText :: (output: *u8, capacity: s64, cursor: *s64, value: string) -> bool {
+    if output == null || cursor == null || capacity <= 0 ||
+        cursor.* < 0 || cursor.* >= capacity ||
+        cast(s64)value.count > capacity - cursor.* - 1 {
+        return false
+    }
+    for byte: value {
+        if byte == 0 { return false }
+        output[cursor.*] = byte
+        cursor.* += 1
+    }
+    output[cursor.*] = 0
+    return true
+}
+
+AppendU64 :: (output: *u8, capacity: s64, cursor: *s64, value: u64) -> bool {
+    digits: [24]u8
+    count: s64 = 0
+    v := value
+    while true {
+        digits[count] = cast(u8)(48 + v % 10)
+        count += 1
+        v /= 10
+        if v == 0 { break }
+    }
+    left: s64 = 0
+    right := count - 1
+    while left < right {
+        tmp := digits[left]
+        digits[left] = digits[right]
+        digits[right] = tmp
+        left += 1
+        right -= 1
+    }
+    return AppendText(output, capacity, cursor, TextView(digits[0:count]))
+}
+
+AppendHex :: (output: *u8, capacity: s64, cursor: *s64, bytes: *u8, length: s64) -> bool {
+    if output == null || cursor == null || bytes == null ||
+        length < 0 || length > (capacity - cursor.* - 1) / 2 {
+        return false
+    }
+    if Crypto.BytesToHex(bytes, length, *output[cursor.*], capacity - cursor.*) == 0 {
+        return false
+    }
+    cursor.* += length * 2
+    return true
+}
+
+#scope_export
+// Exports an account key file in mesh-account-key-v3 format using Argon2id
+// (memory-hard KDF), full 16-byte salt, XChaCha20-Poly1305 (24-byte nonce),
+// and full authenticated header AAD.
+AccountKeysEncryptedArgon2idText :: (account: *Keys.AccountKeys,
+    passphrase: string, output: *u8, output_capacity: s64,
+    operations: u64 = ARGON2_DEFAULT_OPS, memory: usize = ARGON2_DEFAULT_MEM) -> s32 {
+    if output == null || output_capacity <= 0 { return 0 }
+    output[0] = 0
+    if account == null || passphrase.count == 0 ||
+        account.public_id[0] == 0 || account.public_key_hex[0] == 0 ||
+        account.private_key_hex[0] == 0 ||
+        operations < 1 || operations > ARGON2_MAX_OPS ||
+        memory < ARGON2_MIN_MEM || memory > ARGON2_MAX_MEM {
+        return 0
+    }
+    plaintext: [Keys.ACCOUNT_EXPORT_TEXT_SIZE]u8
+    salt: [16]u8
+    nonce: [24]u8
+    key: [32]u8
+    sealed: [Keys.ACCOUNT_EXPORT_TEXT_SIZE + 16]u8
+    defer {
+        Native.Clear(plaintext[:])
+        Native.Clear(key[:])
+        Native.Clear(sealed[:])
+    }
+    if Keys.AccountKeysText(account, *plaintext[0], Keys.ACCOUNT_EXPORT_TEXT_SIZE) == 0 {
+        return 0
+    }
+    plain_length: s64 = 0
+    while plain_length < Keys.ACCOUNT_EXPORT_TEXT_SIZE && plaintext[plain_length] != 0 {
+        plain_length += 1
+    }
+    if plain_length == 0 || plain_length >= Keys.ACCOUNT_EXPORT_TEXT_SIZE { return 0 }
+
+    descriptor: *TextDescriptor = cast(*TextDescriptor)(*passphrase)
+    pass_bytes := BytesFromPointer(descriptor.data, cast(u64)passphrase.count)
+    if !Native.RandomBytes(salt[:]) || !Native.RandomBytes(nonce[:]) ||
+        !Native.Argon2id(pass_bytes, salt[:], key[:], operations, memory) {
+        return 0
+    }
+    cursor: s64 = 0
+    if !AppendText(output, output_capacity, *cursor,
+        "mesh-account-key-v3\nalgorithm=ML-DSA-44\nkdf=Argon2id\nops=") ||
+        !AppendU64(output, output_capacity, *cursor, operations) ||
+        !AppendText(output, output_capacity, *cursor, "\nmem=") ||
+        !AppendU64(output, output_capacity, *cursor, cast(u64)memory) ||
+        !AppendText(output, output_capacity, *cursor, "\nsalt=") ||
+        !AppendHex(output, output_capacity, *cursor, *salt[0], 16) ||
+        !AppendText(output, output_capacity, *cursor, "\nnonce=") ||
+        !AppendHex(output, output_capacity, *cursor, *nonce[0], 24) {
+        output[0] = 0
+        return 0
+    }
+    aad_bytes := BytesFromPointer(output, cast(u64)cursor)
+    sealed_length := Native.XChaCha20Poly1305Seal(plaintext[0:plain_length], aad_bytes,
+        key[:], nonce[:], sealed[:])
+    if sealed_length != plain_length + 16 {
+        output[0] = 0
+        return 0
+    }
+    if !AppendText(output, output_capacity, *cursor, "\nciphertext=") ||
+        !AppendHex(output, output_capacity, *cursor, *sealed[0], sealed_length) {
+        output[0] = 0
+        return 0
+    }
+    return 1
+}
+
+// Parses mesh-account-key-v3 (Argon2id or PBKDF2-SHA256) and legacy ksync-account-key-v2.
+ParseEncryptedAccountKeysNative :: (body: string, passphrase: string, account: *Keys.AccountKeys) -> s32 {
+    if account == null { return 0 }
+    account.* = Keys.AccountKeys.{}
+    if body.count == 0 || body.count >= Keys.ACCOUNT_EXPORT_ENCRYPTED_TEXT_SIZE || passphrase.count == 0 {
+        return 0
+    }
+    trimmed := body
+    if trimmed.count >= 3 && trimmed[0] == 239 && trimmed[1] == 187 && trimmed[2] == 191 {
+        trimmed = trimmed[3:trimmed.count]
+    }
+    if !StartsWith(trimmed, "mesh-account-key-v3") || LineValue(trimmed, "kdf=") != "Argon2id" {
+        return Keys.ParseEncryptedAccountKeys(body, passphrase, account)
+    }
+    ops := ParseU64(LineValue(trimmed, "ops="), ARGON2_MAX_OPS)
+    mem := cast(usize)ParseU64(LineValue(trimmed, "mem="), cast(u64)ARGON2_MAX_MEM)
+    salt_text := LineValue(trimmed, "salt=")
+    nonce_text := LineValue(trimmed, "nonce=")
+    sealed_text := LineValue(trimmed, "ciphertext=")
+    if ops < 1 || mem < ARGON2_MIN_MEM || salt_text.count != 32 || nonce_text.count != 48 ||
+        sealed_text.count <= 32 || sealed_text.count % 2 != 0 ||
+        sealed_text.count / 2 > Keys.ACCOUNT_EXPORT_TEXT_SIZE {
+        return 0
+    }
+    marker: string = "\nciphertext="
+    aad_length: s64 = -1
+    scan: s64 = 0
+    while scan + marker.count <= trimmed.count {
+        if StartsWith(trimmed[scan:trimmed.count], marker) {
+            aad_length = scan
+            break
+        }
+        scan += 1
+    }
+    if aad_length <= 0 { return 0 }
+
+    salt: [16]u8
+    nonce: [24]u8
+    key: [32]u8
+    sealed: [Keys.ACCOUNT_EXPORT_TEXT_SIZE]u8
+    plaintext: [Keys.ACCOUNT_EXPORT_TEXT_SIZE]u8
+    defer {
+        Native.Clear(plaintext[:])
+        Native.Clear(key[:])
+        Native.Clear(sealed[:])
+    }
+    sealed_length := sealed_text.count / 2
+    pass_desc: *TextDescriptor = cast(*TextDescriptor)(*passphrase)
+    body_desc: *TextDescriptor = cast(*TextDescriptor)(*trimmed)
+    pass_bytes := BytesFromPointer(pass_desc.data, cast(u64)passphrase.count)
+    aad_bytes := BytesFromPointer(body_desc.data, cast(u64)aad_length)
+    if Crypto.HexToBytes(salt_text, *salt[0], 16) == 0 ||
+        Crypto.HexToBytes(nonce_text, *nonce[0], 24) == 0 ||
+        Crypto.HexToBytes(sealed_text, *sealed[0], sealed_length) == 0 ||
+        !Native.Argon2id(pass_bytes, salt[:], key[:], ops, mem) {
+        return 0
+    }
+    plain_length := Native.XChaCha20Poly1305Open(sealed[0:sealed_length], aad_bytes,
+        key[:], nonce[:], plaintext[:])
+    if plain_length != sealed_length - 16 { return 0 }
+    plaintext[plain_length] = 0
+    if Keys.ParseAccountKeys(TextView(plaintext[0:plain_length]), account) == 0 {
+        account.* = Keys.AccountKeys.{}
+        return 0
+    }
+    return 1
+}

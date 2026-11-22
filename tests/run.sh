@@ -195,6 +195,11 @@ test_headers "$work/authorization"
 env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY -u DBUS_SESSION_BUS_ADDRESS \
     "$work/authorization_test" "$root/tests/fixtures/authorization_v1.json"
 
+LDLIBS="$liboqs ${SODIUM_LIBS:--l:libsodium.so.23}" \
+"$ziran_bin" build --project --target=c --entry native_extras_behavior:Main --exe --root "$root/tests" \
+    -o "$work/native-extras-test" "$root/tests/native_extras_behavior.zi"
+env -u DISPLAY -u WAYLAND_DISPLAY "$work/native-extras-test/native_extras_behavior"
+
 "$ziran_bin" bundle --project --root "$root/tests" \
     --entry url_portable:Check -o "$work/url.zx" \
     "$root/tests/url_portable.zi"

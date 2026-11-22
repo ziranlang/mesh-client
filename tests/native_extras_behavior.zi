@@ -1,0 +1,65 @@
+// Tests SIMD entity chunk parity/guard (entity_native.zi) and Argon2id
+// mesh-account-key-v3 round-trip + header AAD tamper rejection (keys_native.zi).
+Entity :: #import "mesh_client/entity";
+EntityNative :: #import "mesh_client/entity_native";
+Keys :: #import "mesh_client/keys";
+KeysNative :: #import "mesh_client/keys_native";
+Crypto :: #import "mesh_client/crypto";
+Native :: #import "crypto/native";
+#import "byte_text_linux"
+
+#scope_export
+Main :: () -> s32 {
+    if !Native.Initialize() { return 1 }
+
+    // 1. SIMD entity chunk matches portable scalar byte-for-byte.
+    sk: [32]u8
+    plain: [64]u8
+    for i: 0..31 { sk[i] = cast(u8)(i + 1) }
+    for i: 0..63 { plain[i] = cast(u8)(i * 3 + 7) }
+    hash_hex: [65]u8
+    Crypto.Sha256Hex(*plain[0], 64, *hash_hex[0])
+    hash := TextView(hash_hex[0:64])
+
+    sealed_scalar: [80]u8
+    sealed_simd: [80]u8
+    opened: [64]u8
+    if Entity.SealEntityChunk(sk[:], "photos", hash, 0, plain[:], sealed_scalar[:]) != 80 { return 2 }
+    if EntityNative.SealEntityChunkNative(sk[:], "photos", hash, 0, plain[:], sealed_simd[:]) != 80 { return 3 }
+    for i: 0..79 { if sealed_scalar[i] != sealed_simd[i] { return 4 } }
+    if EntityNative.OpenEntityChunkNative(sk[:], "photos", hash, 0, sealed_simd[:], opened[:]) != 64 { return 5 }
+    for i: 0..63 { if opened[i] != plain[i] { return 6 } }
+
+    // Mismatched hash must be rejected on single-chunk file.
+    bad_plain: [4]u8 = .{1, 2, 3, 4}
+    bad_out: [32]u8
+    if EntityNative.SealEntityChunkNative(sk[:], "photos", hash, 0, bad_plain[:], bad_out[:]) != -1 { return 7 }
+
+    // 2. Argon2id mesh-account-key-v3 round-trip and AAD tamper rejection.
+    account: Keys.AccountKeys
+    if Keys.CreateAccountKeys(*account) == 0 { return 8 }
+    exported: [Keys.ACCOUNT_EXPORT_ENCRYPTED_TEXT_SIZE]u8
+    if KeysNative.AccountKeysEncryptedArgon2idText(*account, "quantum-safe-pass",
+        *exported[0], Keys.ACCOUNT_EXPORT_ENCRYPTED_TEXT_SIZE, 1, 8192) == 0 {
+        return 9
+    }
+    restored: Keys.AccountKeys
+    exported_len: s64 = 0
+    while exported[exported_len] != 0 { exported_len += 1 }
+    if KeysNative.ParseEncryptedAccountKeysNative(TextView(exported[0:exported_len]),
+        "quantum-safe-pass", *restored) == 0 {
+        return 10
+    }
+    if KeysNative.ParseEncryptedAccountKeysNative(TextView(exported[0:exported_len]),
+        "wrong-pass", *restored) != 0 {
+        return 11
+    }
+    // Mutating authenticated header byte (algorithm=ML-DSA-44 -> ML-DSA-45) must fail.
+    exported[37] = cast(u8)53
+    if KeysNative.ParseEncryptedAccountKeysNative(TextView(exported[0:exported_len]),
+        "quantum-safe-pass", *restored) != 0 {
+        return 12
+    }
+    print("Mesh native SIMD entity chunks and Argon2id v3 key files passed\n")
+    return 0
+}
