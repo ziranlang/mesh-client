@@ -1,0 +1,44 @@
+// Canonical Mesh wire protocol constants (signing domains, headers, and
+// at-rest envelope profiles). Kept self-contained so it can also be extracted
+// directly into a standalone mesh-protocol package without changing any bytes.
+
+// Wire headers (canonical X-Mesh-*).
+HEADER_USER :: "X-Mesh-User"
+HEADER_SIGNATURE :: "X-Mesh-Signature"
+HEADER_CLIENT :: "X-Mesh-Client"
+HEADER_TX :: "X-Mesh-Tx"
+HEADER_2FA :: "X-Mesh-2FA"
+HEADER_DELEGATE :: "X-Mesh-Delegate"
+HEADER_ADMIN :: "X-Mesh-Admin"
+
+// Canonical signed-message domains (mesh-*).
+DOMAIN_SYNC :: "mesh-sync-v1"
+DOMAIN_TX :: "mesh-tx-v1"
+DOMAIN_DEVICE_KEY :: "mesh-device-key-v1"
+DOMAIN_DEVICE_REVOKE :: "mesh-device-revoke-v1"
+DOMAIN_AUTHORIZATION :: "mesh-authorization-v1"
+DOMAIN_RENDEZVOUS_CLAIM :: "mesh-rendezvous-claim-v1"
+DOMAIN_SESSION :: "mesh-session-v1"
+DOMAIN_DELEGATE_REQUEST :: "mesh-delegate-request-v1"
+DOMAIN_RELEASE_V2 :: "mesh-zib-release-v2"
+DOMAIN_RELEASE_V1 :: "mesh-zib-release-v1"
+DOMAIN_PACK_GRANT :: "mesh-pack-grant-v1"
+DOMAIN_APP_MANIFEST :: "mesh-app-manifest-v1"
+DOMAIN_APP_APPROVAL :: "mesh-app-approval-v1"
+DOMAIN_NODE_REQUEST :: "mesh-node-request-v1"
+DOMAIN_PAIRING_INVITE :: "mesh-pairing-invite-v1"
+DOMAIN_PAIRING_ACCEPTANCE :: "mesh-pairing-invite-v1-acceptance"
+DOMAIN_NAME_CLAIM :: "mesh-name-claim-v1"
+DOMAIN_RECORD_PROVENANCE :: "mesh-record-provenance-v1"
+
+// 1-year legacy daochi-* signed-message compatibility cutoff (2027-11-22T00:00:00Z).
+LEGACY_DAOCHI_SIGNED_VALID_THROUGH :: 1826928000
+LEGACY_DOMAIN_SYNC :: "daochi-sync-v1"
+LEGACY_DOMAIN_TX :: "daochi-tx-v1"
+LEGACY_DOMAIN_RELEASE_V2 :: "daochi-zib-release-v2"
+
+// Permanent at-rest encrypted data format identifiers (never rename; bound in AAD/KDF).
+ENVELOPE_RECORD_V1 :: "daochi-record-v1"
+ENVELOPE_RECORD_V2 :: "mesh-record-v2"
+ENTITY_KDF_PREFIX :: "daochi-entity-v1/"
+COLLECTION_KEY_KDF_PREFIX :: "daochi-collection-key-v1"
