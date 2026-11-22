@@ -1,0 +1,61 @@
+// Master-seed HKDF-SHA-256 key separation for Mesh apps.
+// Derives isolated 32-byte subkeys from a 32-byte account master seed so
+// individual apps never need access to the raw ML-DSA-44 account signing key.
+#scope_module
+Kdf :: #import "crypto/kdf";
+Wipe :: #import "crypto/wipe";
+
+#scope_file
+SEED_SALT :: "mesh-master-seed-v1"
+
+LabelValid :: (text: string, max_len: s64) -> bool {
+    if text.count < 1 || text.count > max_len { return false }
+    for b: text {
+        if !((b >= 97 && b <= 122) || (b >= 48 && b <= 57) || b == 45 || b == 46 || b == 95) {
+            return false
+        }
+    }
+    return true
+}
+
+DeriveLabeled :: (ikm: []u8, salt_text: string, prefix: string, part1: string, sep: string, part2: string, output: []u8) -> bool {
+    if ikm.count != 32 || output.count != 32 { return false }
+    salt_bytes: [32]u8
+    if salt_text.count > 32 { return false }
+    for b, i: salt_text { salt_bytes[i] = b }
+    info: [192]u8
+    at: s64 = 0
+    if prefix.count + part1.count + sep.count + part2.count > info.count { return false }
+    for b: prefix { info[at] = b; at += 1 }
+    for b: part1 { info[at] = b; at += 1 }
+    for b: sep { info[at] = b; at += 1 }
+    for b: part2 { info[at] = b; at += 1 }
+    defer Wipe.SecureWipe(info[0:at])
+    return Kdf.HkdfSha256(salt_bytes[0:salt_text.count], ikm, info[0:at], output)
+}
+
+#scope_export
+// Derives the 32-byte Entity Master Key from the 32-byte account master seed.
+DeriveEntityMasterKey :: (master_seed: []u8, output: []u8) -> bool {
+    return DeriveLabeled(master_seed, SEED_SALT, "mesh-entity-master-v1", "", "", "", output)
+}
+
+// Derives a per-kind entity record key from the Entity Master Key (without
+// requiring the account's ML-DSA-44 signing key).
+DeriveEntityRecordKeyFromMaster :: (entity_master: []u8, kind: string, output: []u8) -> bool {
+    if !LabelValid(kind, 48) { return false }
+    return DeriveLabeled(entity_master, "mesh-entity-v2", "records/", kind, "", "", output)
+}
+
+// Derives an app-isolated 32-byte key for (app_id, purpose). Compromising one
+// app key cannot derive another app's keys or the account master seed.
+DeriveAppKey :: (master_seed: []u8, app_id: string, purpose: string, output: []u8) -> bool {
+    if !LabelValid(app_id, 64) || !LabelValid(purpose, 64) { return false }
+    return DeriveLabeled(master_seed, SEED_SALT, "mesh-app-v1/", app_id, "/", purpose, output)
+}
+
+// Derives a 32-byte deterministic device seed for a given device_id.
+DeriveDeviceSeed :: (master_seed: []u8, device_id: string, output: []u8) -> bool {
+    if !LabelValid(device_id, 64) { return false }
+    return DeriveLabeled(master_seed, SEED_SALT, "mesh-device-v1/", device_id, "", "", output)
+}

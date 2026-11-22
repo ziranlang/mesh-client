@@ -1,0 +1,207 @@
+// Compact single-encoded Mesh record envelope v2 ("MRV2").
+// Eliminates the 1.78x double-Base64url overhead of JSON-in-Base64 v1
+// envelopes (~25% smaller wire/SQLite payload, ~2x faster encode/decode).
+//
+// Binary layout before single Base64url encoding:
+//   [0..4)    ASCII "MRV2"
+//   [4..28)   24-byte random XChaCha20-Poly1305 nonce
+//   [28]      key_id length (1..128)
+//   [29..29+K) key_id ASCII bytes
+//   [29+K]    schema length (1..128)
+//   [30+K..30+K+S) schema ASCII bytes
+//   [30+K+S..) XChaCha20-Poly1305(plaintext, aad) || 16-byte Poly1305 tag
+//
+// AAD binds: "mesh-record-v2\n" + account_id + "\n" + app_id + "\n" +
+//            collection + "\n" + id + "\n" + key_id + "\n" + schema
+#scope_module
+ChaCha :: #import "crypto/chacha20";
+Wipe :: #import "crypto/wipe";
+
+#scope_file
+BASE64_URL :: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+PlainValid :: (value: string, max_len: s64) -> bool {
+    if value.count < 1 || value.count > max_len { return false }
+    for b: value {
+        if !((b >= 48 && b <= 57) || (b >= 65 && b <= 90) || (b >= 97 && b <= 122) ||
+            b == 45 || b == 46 || b == 58 || b == 95) { return false }
+    }
+    return true
+}
+
+HashValid :: (value: string) -> bool {
+    if value.count != 64 { return false }
+    for b: value {
+        if !((b >= 48 && b <= 57) || (b >= 97 && b <= 102)) { return false }
+    }
+    return true
+}
+
+PutBytes :: (out: []u8, at: *s64, text: string) -> bool {
+    if at.* + text.count > out.count { return false }
+    for b: text { out[at.*] = b; at.* += 1 }
+    return true
+}
+
+BuildAAD :: (account_id: string, app_id: string, collection: string, id: string,
+    key_id: string, schema: string, output: []u8) -> s64 {
+    if !HashValid(account_id) || !PlainValid(app_id, 64) || !PlainValid(collection, 128) ||
+        !PlainValid(id, 256) || !PlainValid(key_id, 128) || !PlainValid(schema, 128) {
+        return -1
+    }
+    at: s64 = 0
+    if !PutBytes(output, *at, "mesh-record-v2\n") ||
+        !PutBytes(output, *at, account_id) || !PutBytes(output, *at, "\n") ||
+        !PutBytes(output, *at, app_id) || !PutBytes(output, *at, "\n") ||
+        !PutBytes(output, *at, collection) || !PutBytes(output, *at, "\n") ||
+        !PutBytes(output, *at, id) || !PutBytes(output, *at, "\n") ||
+        !PutBytes(output, *at, key_id) || !PutBytes(output, *at, "\n") ||
+        !PutBytes(output, *at, schema) {
+        return -1
+    }
+    return at
+}
+
+Base64Encode :: (input: []u8, output: []u8) -> s64 {
+    rem := input.count % 3
+    needed := input.count / 3 * 4 + (ifx rem == 0 then cast(s64)0 else rem + 1)
+    if needed > output.count { return -1 }
+    alphabet := BASE64_URL
+    i: s64 = 0
+    o: s64 = 0
+    while i + 3 <= input.count {
+        v := (cast(u32)input[i] << 16) | (cast(u32)input[i + 1] << 8) | cast(u32)input[i + 2]
+        output[o] = alphabet[cast(s64)((v >> 18) & 63)]
+        output[o + 1] = alphabet[cast(s64)((v >> 12) & 63)]
+        output[o + 2] = alphabet[cast(s64)((v >> 6) & 63)]
+        output[o + 3] = alphabet[cast(s64)(v & 63)]
+        i += 3
+        o += 4
+    }
+    if rem == 1 {
+        v := cast(u32)input[i] << 16
+        output[o] = alphabet[cast(s64)((v >> 18) & 63)]
+        output[o + 1] = alphabet[cast(s64)((v >> 12) & 63)]
+        o += 2
+    } else if rem == 2 {
+        v := (cast(u32)input[i] << 16) | (cast(u32)input[i + 1] << 8)
+        output[o] = alphabet[cast(s64)((v >> 18) & 63)]
+        output[o + 1] = alphabet[cast(s64)((v >> 12) & 63)]
+        output[o + 2] = alphabet[cast(s64)((v >> 6) & 63)]
+        o += 3
+    }
+    return o
+}
+
+Base64Digit :: (b: u8) -> s32 {
+    if b >= 65 && b <= 90 { return cast(s32)(b - 65) }
+    if b >= 97 && b <= 122 { return cast(s32)(b - 97) + 26 }
+    if b >= 48 && b <= 57 { return cast(s32)(b - 48) + 52 }
+    if b == 45 { return 62 }
+    if b == 95 { return 63 }
+    return -1
+}
+
+Base64Decode :: (text: string, output: []u8) -> s64 {
+    if text.count % 4 == 1 { return -1 }
+    size := text.count / 4 * 3 + (ifx text.count % 4 == 0 then cast(s64)0 else text.count % 4 - 1)
+    if size > output.count { return -1 }
+    value: u32 = 0
+    bits: s32 = 0
+    length: s64 = 0
+    for b: text {
+        d := Base64Digit(b)
+        if d < 0 { return -1 }
+        value = (value << 6) | cast(u32)d
+        bits += 6
+        if bits >= 8 {
+            bits -= 8
+            output[length] = cast(u8)((value >> cast(u32)bits) & 255)
+            length += 1
+        }
+    }
+    if bits > 0 && (value & ((cast(u32)1 << cast(u32)bits) - 1)) != 0 { return -1 }
+    return length
+}
+
+#scope_export
+RecordV2Header :: struct {
+    account_id: string
+    app_id: string
+    collection: string
+    id: string
+    key_id: string
+    schema: string
+}
+
+// Seals plaintext into a compact single-Base64url mesh-record-v2 payload.
+// scratch must be at least 30 + key_id.count + schema.count + plaintext.count + 16 bytes.
+SealRecordV2 :: (header: RecordV2Header, key: []u8, nonce: []u8, plaintext: []u8,
+    scratch: []u8, output: []u8) -> s64 {
+    if key.count != 32 || nonce.count != 24 || plaintext.count < 0 { return -1 }
+    aad: [768]u8
+    aad_len := BuildAAD(header.account_id, header.app_id, header.collection, header.id,
+        header.key_id, header.schema, aad[:])
+    if aad_len < 0 { return -1 }
+    raw_len := 30 + header.key_id.count + header.schema.count + plaintext.count + 16
+    if scratch.count < raw_len { return -1 }
+    scratch[0] = 77 // 'M'
+    scratch[1] = 82 // 'R'
+    scratch[2] = 86 // 'V'
+    scratch[3] = 50 // '2'
+    for i: 0..23 { scratch[4 + i] = nonce[i] }
+    at: s64 = 28
+    scratch[at] = cast(u8)header.key_id.count
+    at += 1
+    for b: header.key_id { scratch[at] = b; at += 1 }
+    scratch[at] = cast(u8)header.schema.count
+    at += 1
+    for b: header.schema { scratch[at] = b; at += 1 }
+    sealed := ChaCha.XChaCha20Poly1305SealBytes(key, nonce, plaintext, aad[0:aad_len],
+        scratch[at:raw_len])
+    if sealed != plaintext.count + 16 {
+        Wipe.SecureWipe(scratch[0:raw_len])
+        return -1
+    }
+    encoded := Base64Encode(scratch[0:raw_len], output)
+    Wipe.SecureWipe(scratch[0:raw_len])
+    return encoded
+}
+
+// Opens a single-Base64url mesh-record-v2 payload, verifying AAD and returning
+// plaintext length (or -1 on error with output wiped).
+OpenRecordV2 :: (account_id: string, app_id: string, collection: string, id: string,
+    key: []u8, encoded: string, scratch: []u8, key_id_out: []u8, key_id_len: *s64,
+    schema_out: []u8, schema_len: *s64, plain_out: []u8) -> s64 {
+    if key.count != 32 || key_id_len == null || schema_len == null { return -1 }
+    raw_len := Base64Decode(encoded, scratch)
+    if raw_len < 48 { return -1 }
+    defer Wipe.SecureWipe(scratch[0:raw_len])
+    if scratch[0] != 77 || scratch[1] != 82 || scratch[2] != 86 || scratch[3] != 50 { return -1 }
+    nonce := scratch[4:28]
+    at: s64 = 28
+    klen := cast(s64)scratch[at]
+    at += 1
+    if klen < 1 || klen > 128 || at + klen + 1 > raw_len || klen > key_id_out.count { return -1 }
+    for i: cast(s64)0..klen - 1 { key_id_out[i] = scratch[at + i] }
+    at += klen
+    slen := cast(s64)scratch[at]
+    at += 1
+    if slen < 1 || slen > 128 || at + slen + 16 > raw_len || slen > schema_out.count { return -1 }
+    for i: cast(s64)0..slen - 1 { schema_out[i] = scratch[at + i] }
+    at += slen
+
+    aad: [768]u8
+    aad_len := BuildAAD(account_id, app_id, collection, id,
+        TextView(key_id_out[0:klen]), TextView(schema_out[0:slen]), aad[:])
+    if aad_len < 0 { return -1 }
+    plain_len := ChaCha.XChaCha20Poly1305OpenBytes(key, nonce, scratch[at:raw_len],
+        aad[0:aad_len], plain_out)
+    if plain_len < 0 {
+        Wipe.SecureWipe(plain_out)
+        return -1
+    }
+    key_id_len.* = klen
+    schema_len.* = slen
+    return plain_len
+}

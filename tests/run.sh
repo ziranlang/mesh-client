@@ -200,6 +200,10 @@ LDLIBS="$liboqs ${SODIUM_LIBS:--l:libsodium.so.23}" \
     -o "$work/native-extras-test" "$root/tests/native_extras_behavior.zi"
 env -u DISPLAY -u WAYLAND_DISPLAY "$work/native-extras-test/native_extras_behavior"
 
+"$ziran_bin" build --project --target=c --entry v2_seed_behavior:Main --exe --root "$root/tests" \
+    -o "$work/v2-seed-test" "$root/tests/v2_seed_behavior.zi"
+env -u DISPLAY -u WAYLAND_DISPLAY "$work/v2-seed-test/v2_seed_behavior"
+
 "$ziran_bin" bundle --project --root "$root/tests" \
     --entry url_portable:Check -o "$work/url.zx" \
     "$root/tests/url_portable.zi"

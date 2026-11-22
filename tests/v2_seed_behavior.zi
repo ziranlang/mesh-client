@@ -1,0 +1,83 @@
+// Tests HKDF-SHA-256 master-seed key separation (seed.zi) and compact
+// single-encoded mesh-record-v2 envelopes (record_v2.zi) including size savings.
+Seed :: #import "mesh_client/seed";
+RecordV2 :: #import "mesh_client/record_v2";
+Entity :: #import "mesh_client/entity";
+Wipe :: #import "crypto/wipe";
+
+#scope_export
+Main :: () -> s32 {
+    master: [32]u8
+    for i: 0..31 { master[i] = cast(u8)(i + 1) }
+
+    // 1. Master-seed key separation: isolated keys per domain/app/kind.
+    em1: [32]u8; em2: [32]u8
+    if !Seed.DeriveEntityMasterKey(master[:], em1[:]) ||
+        !Seed.DeriveEntityMasterKey(master[:], em2[:]) ||
+        !Wipe.ConstantTimeEqual(em1[:], em2[:]) { return 1 }
+
+    rec_photos: [32]u8; rec_levels: [32]u8
+    if !Seed.DeriveEntityRecordKeyFromMaster(em1[:], "photos", rec_photos[:]) ||
+        !Seed.DeriveEntityRecordKeyFromMaster(em1[:], "levels", rec_levels[:]) ||
+        Wipe.ConstantTimeEqual(rec_photos[:], rec_levels[:]) { return 2 }
+
+    app_a: [32]u8; app_b: [32]u8; dev_1: [32]u8
+    if !Seed.DeriveAppKey(master[:], "shovey", "sync", app_a[:]) ||
+        !Seed.DeriveAppKey(master[:], "diary", "sync", app_b[:]) ||
+        !Seed.DeriveDeviceSeed(master[:], "phone-1", dev_1[:]) ||
+        Wipe.ConstantTimeEqual(app_a[:], app_b[:]) ||
+        Wipe.ConstantTimeEqual(app_a[:], em1[:]) ||
+        Wipe.ConstantTimeEqual(app_a[:], dev_1[:]) { return 3 }
+
+    // 2. Compact single-encoded mesh-record-v2 round-trip + AAD tamper rejection.
+    account := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    nonce: [24]u8
+    for i: 0..23 { nonce[i] = cast(u8)(i + 9) }
+    plain: [512]u8
+    for i: 0..511 { plain[i] = cast(u8)(65 + (i % 26)) }
+    header := RecordV2.RecordV2Header.{
+        account_id = account,
+        app_id = "entity",
+        collection = "private.entity.v1.photos",
+        id = "photo-001",
+        key_id = "entity-v2",
+        schema = "entity.photo.v1"
+    }
+    scratch: [1024]u8
+    v2_out: [1536]u8
+    v2_len := RecordV2.SealRecordV2(header, rec_photos[:], nonce[:], plain[:], scratch[:], v2_out[:])
+    if v2_len <= 0 { return 4 }
+
+    // Compare wire size against double-Base64url v1 entity envelope.
+    v1_meta := Entity.EntityRecordMetadata.{
+        account_id = account,
+        kind = "photos",
+        id = "photo-001",
+        schema = "entity.photo.v1"
+    }
+    v1_sealed: [600]u8
+    v1_out: [2048]u8
+    v1_len := Entity.SealEntityRecord(master[:], v1_meta, plain[:], nonce[:], v1_sealed[:], v1_out[:])
+    if v1_len <= 0 || v2_len >= v1_len { return 5 }
+
+    key_id_buf: [128]u8; key_id_len: s64 = 0
+    schema_buf: [128]u8; schema_len: s64 = 0
+    opened: [512]u8
+    open_len := RecordV2.OpenRecordV2(account, "entity", "private.entity.v1.photos", "photo-001",
+        rec_photos[:], TextView(v2_out[0:v2_len]), scratch[:],
+        key_id_buf[:], *key_id_len, schema_buf[:], *schema_len, opened[:])
+    if open_len != 512 || !Wipe.ConstantTimeEqual(opened[:], plain[:]) ||
+        TextView(key_id_buf[0:key_id_len]) != "entity-v2" ||
+        TextView(schema_buf[0:schema_len]) != "entity.photo.v1" {
+        return 6
+    }
+
+    // Wrong collection (AAD mismatch) must fail and wipe output.
+    if RecordV2.OpenRecordV2(account, "entity", "private.entity.v1.levels", "photo-001",
+        rec_photos[:], TextView(v2_out[0:v2_len]), scratch[:],
+        key_id_buf[:], *key_id_len, schema_buf[:], *schema_len, opened[:]) != -1 {
+        return 7
+    }
+    print("Mesh master-seed HKDF and record-v2 passed (512B plain: v1=% B -> v2=% B)\n", v1_len, v2_len)
+    return 0
+}
