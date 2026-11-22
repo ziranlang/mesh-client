@@ -62,7 +62,7 @@ main :: () -> s32 {
         return 1
     }
     message: Vec(u8)
-    BuilderPrint(*message, "daochi-zib-release-v2\nroot\n18\n2.1.21\nkryon-app-v1\n9\n3\n0\ninbe-2026-10\n1\nmodule\n%\n4096\n", HASH_A)
+    BuilderPrint(*message, "mesh-zib-release-v2\nroot\n18\n2.1.21\nkryon-app-v1\n9\n3\n0\ninbe-2026-10\n1\nmodule\n%\n4096\n", HASH_A)
     BuilderPrint(*message, "2\ndiary\n1.3.4\n%\n800\nlumi\n1.3.4\n%\n900\n", HASH_B, HASH_B)
     expected := BuilderFinish(message)
     if TextFromBytes(signed_message[0:signed_length]) != expected {

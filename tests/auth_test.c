@@ -18,7 +18,7 @@ static bool digest(String body, Slice output)
 static bool sign_message(void *context, String message, Slice output)
 {
     assert(context == (void *)0x1);
-    const char prefix[] = "daochi-sync-v1\nPOST\n/api/v1/sync/login\n";
+    const char prefix[] = "mesh-sync-v1\nPOST\n/api/v1/sync/login\n";
     size_t head = sizeof prefix - 1;
     assert(message.length == head + 64 + 1 + 64 + 1);
     assert(memcmp(message.data, prefix, head) == 0);

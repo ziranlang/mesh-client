@@ -20,7 +20,7 @@ static bool digest(String body, Slice output)
 static bool signer(void *context, String message, Slice output)
 {
     assert(context == (void *)0x1);
-    const char prefix[] = "daochi-sync-v1\nPOST\n/api/v1/account/delete\n";
+    const char prefix[] = "mesh-sync-v1\nPOST\n/api/v1/account/delete\n";
     assert(message.length == sizeof prefix - 1 + 64 + 1 + 64 + 1);
     assert(memcmp(message.data, prefix, sizeof prefix - 1) == 0);
     assert(message.data[sizeof prefix - 1 + 64] == '\n');

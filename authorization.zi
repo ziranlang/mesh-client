@@ -299,7 +299,7 @@ BuildGrantMessage :: (grant: Grant, output: []u8) -> bool {
         return false
     }
     writer: Writer = .{output, 0, true}
-    writer = WriteText(writer, "daochi-authorization-v1\n1\n")
+    writer = WriteText(writer, "mesh-authorization-v1\n1\n")
     writer = Line(writer, grant.account_id)
     writer = Line(writer, grant.grant_id)
     writer = Line(writer, grant.request_id)
@@ -758,7 +758,7 @@ BuildClaimMessage :: (pending: *PublicRendezvous, client_id: string, signing_key
     }
     output[0] = 0
     writer: Writer = .{output, 0, true}
-    writer = WriteText(writer, "daochi-rendezvous-claim-v1\n")
+    writer = WriteText(writer, "mesh-rendezvous-claim-v1\n")
     writer = Line(writer, TextUntilNul(pending.request_id[:]))
     writer = Line(writer, TextUntilNul(pending.app_id[:]))
     writer = Line(writer, TextUntilNul(pending.node_id[:]))

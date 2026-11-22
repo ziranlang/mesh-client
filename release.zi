@@ -204,7 +204,7 @@ MeshParseRelease :: (json: string, public_hex: string, maximum_size: s64,
         return release
     }
     message: Vec(u8)
-    BuilderPrint(*message, "daochi-zib-release-v2\n%\n%\n%\n%\n%\n%\n%\n%\n%\n",
+    BuilderPrint(*message, "mesh-zib-release-v2\n%\n%\n%\n%\n%\n%\n%\n%\n%\n",
         app_id, sequence, version_text, runtime_text, host, module, schema, key_id, artifact_count)
     for artifact: cast(s32)0..artifact_count - 1 {
         at := ElementAt(json, artifacts, artifact)
@@ -242,9 +242,19 @@ MeshParseRelease :: (json: string, public_hex: string, maximum_size: s64,
     descriptor := cast(*TextDescriptor)(*text)
     public_key: [32]u8
     signature_bytes: [64]u8
-    verified := HexToBytes(public_hex, *public_key[0], 32) != 0 &&
-        HexToBytes(signed, *signature_bytes[0], 64) != 0 &&
+    decoded := HexToBytes(public_hex, *public_key[0], 32) != 0 &&
+        HexToBytes(signed, *signature_bytes[0], 64) != 0
+    verified := decoded &&
         verify(*signature_bytes[0], *public_key[0], descriptor.data, cast(usize)text.count)
+    if !verified && decoded && text.count >= 19 {
+        // 1-year legacy fallback: replace leading "mesh-zib-release-v2" (19 bytes) with "daochi-zib-release-v2".
+        legacy: Vec(u8)
+        BuilderPrint(*legacy, "daochi-zib-release-v2%", text[19:text.count])
+        legacy_text := BuilderFinish(legacy)
+        legacy_desc := cast(*TextDescriptor)(*legacy_text)
+        verified = verify(*signature_bytes[0], *public_key[0], legacy_desc.data, cast(usize)legacy_text.count)
+        ReleaseFree(legacy_desc.data)
+    }
     ReleaseFree(descriptor.data)
     if !verified {
         return MeshRelease.{}

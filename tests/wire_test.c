@@ -33,7 +33,7 @@ int main(void)
     assert(BuildLoginMessageHash(StringView(body_hash, 64),
         StringView(nonce, 64), buffer));
     assert(strcmp(output,
-        "daochi-sync-v1\nPOST\n/api/v1/sync/login\n"
+        "mesh-sync-v1\nPOST\n/api/v1/sync/login\n"
         "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
         "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\n") == 0);
 

@@ -191,7 +191,7 @@ BuildLoginMessageHash :: (body_sha256_hex: string,
         return false
     }
     writer: Writer = Writer.{output, 0, true}
-    writer = WriteText(writer, "daochi-sync-v1\nPOST\n/api/v1/sync/login\n")
+    writer = WriteText(writer, "mesh-sync-v1\nPOST\n/api/v1/sync/login\n")
     writer = WriteText(writer, body_sha256_hex)
     writer = WriteByte(writer, cast(u8)10)
     writer = WriteText(writer, nonce_hex)
@@ -213,7 +213,7 @@ BuildDeleteMessageHash :: (body_sha256_hex: string,
         return false
     }
     writer: Writer = Writer.{output, 0, true}
-    writer = WriteText(writer, "daochi-sync-v1\nPOST\n/api/v1/account/delete\n")
+    writer = WriteText(writer, "mesh-sync-v1\nPOST\n/api/v1/account/delete\n")
     writer = WriteText(writer, body_sha256_hex)
     writer = WriteByte(writer, cast(u8)10)
     writer = WriteText(writer, nonce_hex)

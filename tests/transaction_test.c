@@ -33,7 +33,7 @@ int main(void)
         .expires_at = 1700000300,
     };
     assert(BuildDeviceRegistrationMessage(registration, buffer));
-    assert(strncmp(output, "daochi-device-registration-v1\n", 30) == 0);
+    assert(strncmp(output, "mesh-device-registration-v1\n", 28) == 0);
     assert(strstr(output, "\ninbe\n") != NULL);
     assert(strstr(output, "\nclient-1\n") != NULL);
     assert(strstr(output, "\n1700000300\n") != NULL);
@@ -53,14 +53,14 @@ int main(void)
         .expires_at = 1700000300,
     };
     assert(BuildSyncTransactionMessage(transaction, buffer));
-    assert(strncmp(output, "daochi-tx-v1\n6\n", 15) == 0);
+    assert(strncmp(output, "mesh-tx-v1\n6\n", 13) == 0);
     assert(strstr(output, "\nPOST\n/api/v1/sync\n") != NULL);
     assert(strstr(output, "\n1700000300\n") != NULL);
     assert(BuildSyncTransactionHeader(transaction,
         StringView(account_signature, 4840),
         StringView(device_signature, 128), buffer));
     assert(strstr(output, "\"protocol_version\":6") != NULL);
-    assert(strstr(output, "\"signature_context\":\"daochi-tx-v1\"") != NULL);
+    assert(strstr(output, "\"signature_context\":\"mesh-tx-v1\"") != NULL);
     assert(strstr(output, "\"device_signature\":\"dddd") != NULL);
 
     char legacy[8192];

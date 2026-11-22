@@ -210,7 +210,7 @@ static bool start_telegram(void *context, HttpRequest request, Slice output)
     assert(expires > clock_now && expires <= clock_now + 60);
     char canonical[2048];
     length = snprintf(canonical, sizeof canonical,
-        "daochi-delegate-request-v1\n1\n%s\n%.32s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%lld\n%s\n",
+        "mesh-delegate-request-v1\n1\n%s\n%.32s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%lld\n%s\n",
         (char *)linked->grant->grant_id, headers[0].value.data + 13, (char *)linked->grant->account_id,
         (char *)linked->grant->app_id, (char *)linked->grant->client_id, (char *)linked->grant->node_id,
         (char *)linked->grant->audience, challenge,

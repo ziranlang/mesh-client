@@ -84,7 +84,7 @@ Digest :: (body: string, output: []u8) -> bool {
 SignAccount :: (context: *void, message: string, output: []u8) -> bool {
     unused context
     account_signs += 1
-    if !Contains(message, "daochi-") {
+    if !Contains(message, "mesh-") {
         bad_request = true
     }
     return HexFill(output, 4840, cast(u8)97)
@@ -93,7 +93,7 @@ SignAccount :: (context: *void, message: string, output: []u8) -> bool {
 SignDevice :: (context: *void, message: string, output: []u8) -> bool {
     unused context
     device_signs += 1
-    if !Contains(message, "daochi-tx-v1\n6\n") {
+    if !Contains(message, "mesh-tx-v1\n6\n") {
         bad_request = true
     }
     return HexFill(output, 128, cast(u8)100)

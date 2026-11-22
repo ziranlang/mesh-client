@@ -118,7 +118,7 @@ BuildSessionMessage :: (challenge: *SessionChallenge, output: []u8) -> bool {
     }
     output[0] = 0
     writer: Writer = .{output, 0, true}
-    writer = WriteText(writer, "daochi-session-v1\n")
+    writer = WriteText(writer, "mesh-session-v1\n")
     writer = Line(writer, TextUntilNul(challenge.grant_id[:]))
     writer = Line(writer, TextUntilNul(challenge.challenge[:]))
     writer = Line(writer, TextUntilNul(challenge.node_id[:]))
@@ -302,7 +302,7 @@ BuildBoundProofMessage :: (proof: RequestProof, output: []u8) -> bool {
     }
     output[0] = 0
     writer: Writer = .{output, 0, true}
-    writer = WriteText(writer, "daochi-delegate-request-v1\n1\n")
+    writer = WriteText(writer, "mesh-delegate-request-v1\n1\n")
     writer = Line(writer, proof.grant_id)
     writer = Line(writer, proof.session_id)
     writer = Line(writer, proof.account_id)

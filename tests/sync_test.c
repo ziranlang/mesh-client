@@ -25,14 +25,14 @@ static bool account_sign(void *context, String message, Slice output)
     ++server->account_signs;
     if (server->account_signs == 1) {
         assert(message.length > 20);
-        assert(memcmp(message.data, "daochi-sync-v1\nPOST\n/api/v1/sync/login\n", 39) == 0);
+        assert(memcmp(message.data, "mesh-sync-v1\nPOST\n/api/v1/sync/login\n", 37) == 0);
     } else if (server->account_signs == 2) {
-        assert(memcmp(message.data, "daochi-device-registration-v1\n", 30) == 0);
+        assert(memcmp(message.data, "mesh-device-registration-v1\n", 28) == 0);
         assert(strstr(message.data, "\ninbe\n") != NULL);
         assert(strstr(message.data, "\n1700000300\n") != NULL);
     } else {
         assert(server->account_signs == 3 || server->account_signs == 4);
-        assert(memcmp(message.data, "daochi-tx-v1\n6\n", 15) == 0);
+        assert(memcmp(message.data, "mesh-tx-v1\n6\n", 13) == 0);
         assert(strstr(message.data, "\nPOST\n/api/v1/sync\n") != NULL);
         assert(strstr(message.data, "\n1700000300\n") != NULL);
     }
@@ -47,7 +47,7 @@ static bool device_sign(void *context, String message, Slice output)
     FakeServer *server = context;
     ++server->device_signs;
     assert(server->device_signs <= 2);
-    assert(memcmp(message.data, "daochi-tx-v1\n6\n", 15) == 0);
+    assert(memcmp(message.data, "mesh-tx-v1\n6\n", 13) == 0);
     assert(output.length >= 129);
     memset(output.data, 'd', 128);
     ((char *)output.data)[128] = 0;
