@@ -5,6 +5,7 @@
 // same ones. Keys and plaintext never leave the caller's buffers.
 #import "mesh_client/crypto"
 #import "json_scan"
+CryptoWipe :: #import "crypto/wipe";
 
 ENTITY_KEY_BYTES :: 32
 ENTITY_RECORD_KEY_ID :: "entity-v1"
@@ -90,11 +91,7 @@ ChunkAAD :: (kind: string, index: s64, output: []u8) -> s64 {
 }
 
 Wipe :: (bytes: []u8) {
-    index: s64 = 0
-    while index < bytes.count {
-        bytes[index] = 0
-        index += 1
-    }
+    CryptoWipe.SecureWipe(bytes)
 }
 
 #scope_export
@@ -143,6 +140,15 @@ EntityChunkKey :: (private_key: []u8, kind: string, hash: string, index: s64, ou
 SealEntityChunk :: (private_key: []u8, kind: string, hash: string, index: s64, plain: []u8,
     output: []u8) -> s64 {
     if plain.count < 1 || plain.count > ENTITY_CHUNK_BYTES || output.count < plain.count + 16 { return -1 }
+    // Guard against caller hash bugs that would reuse a zero nonce on single-chunk files.
+    if index == 0 && plain.count < ENTITY_CHUNK_BYTES {
+        actual_hex: [65]u8
+        Sha256Hex(*plain[0], plain.count, *actual_hex[0])
+        if TextView(actual_hex[0:64]) != hash {
+            Wipe(output)
+            return -1
+        }
+    }
     aad: [ENTITY_CONTEXT_MAX]u8
     aad_length := ChunkAAD(kind, index, aad[:])
     key: [ENTITY_KEY_BYTES]u8

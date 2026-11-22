@@ -58,9 +58,9 @@ static bool send_request(void *context, HttpRequest request,
     assert(request.body.length > 100);
     assert(request.headers.length == 2);
     const HttpHeader *headers = request.headers.data;
-    assert(headers[0].name.length == strlen("X-Daochi-User"));
+    assert(headers[0].name.length == strlen("X-Mesh-User"));
     assert(headers[0].value.length == 64);
-    assert(headers[1].name.length == strlen("X-Daochi-Signature"));
+    assert(headers[1].name.length == strlen("X-Mesh-Signature"));
     assert(headers[1].value.length == 4840);
     *status = server->login_status;
     if (*status == 200) {

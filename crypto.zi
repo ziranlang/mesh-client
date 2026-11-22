@@ -1,15 +1,10 @@
-// Account and record cryptography for Mesh apps: SHA-256, HMAC-SHA-256
-// and hex encoding from the crypto package, the account key files'
-// PBKDF2-HMAC-SHA-256, RFC 8439 ChaCha20-Poly1305 and its 24-byte nonce
-// form XChaCha20-Poly1305.
-// All of it is plain Ziran; the signatures themselves come from the Oqs
-// package. The functions take byte pointers and lengths and return 1 on
-// success, 0 on invalid input.
-
-// Importers reach the crypto package's SHA-256 (Sha256Context,
-// Sha256Initialize, Sha256Update, Sha256Finish) through this module. The
-// forms below keep their C names for native hosts and tests.
+// Account and record cryptography for Mesh apps: re-exports SHA-256,
+// HMAC-SHA-256, PBKDF2-HMAC-SHA-256, ChaCha20-Poly1305, XChaCha20-Poly1305,
+// and secure wiping from the reusable Ziran crypto package.
 using CryptoSha256 :: #import "crypto/sha256";
+CryptoChaCha :: #import "crypto/chacha20";
+CryptoKdf :: #import "crypto/kdf";
+CryptoWipe :: #import "crypto/wipe";
 
 #program_export
 Sha256 :: (data: *u8, length: s64, output: *u8) {
@@ -44,19 +39,10 @@ HmacSha256Text :: (key: *u8, key_length: s64,
     return CryptoSha256.HmacSha256Text(key, key_length, data, output)
 }
 
-// PBKDF2 keeps the account key-file derivation format: historical exports
-// included at most 32 salt bytes.
-Pbkdf2Hmac :: (password: *u8, password_length: s64,
-    password_text: string, use_text: bool, data: *u8,
-    data_length: s64, output: *u8) -> s32 {
-    if use_text {
-        return HmacSha256TextKey(password_text, data, data_length, output)
-    }
-    return HmacSha256(password, password_length,
-        data, data_length, output)
-}
-
-Pbkdf2Input :: (password: *u8, password_length: s64,
+// Legacy PBKDF2-HMAC-SHA-256 for ksync-account-key-v2 compatibility:
+// historical v2 exports truncated salt inputs to 32 bytes. Uses the fast
+// precomputed-midstate implementation from crypto/kdf.
+Pbkdf2Legacy :: (password: *u8, password_length: s64,
     password_text: string, use_text: bool,
     salt: *u8, salt_length: s64, iterations: u64, output: *u8) -> s32 {
     if output == null || iterations == 0 || iterations > 100000000 ||
@@ -65,11 +51,20 @@ Pbkdf2Input :: (password: *u8, password_length: s64,
         (salt == null && salt_length > 0) {
         return 0
     }
-
+    used := ifx salt_length > 32 then cast(s64)32 else salt_length
+    if !use_text {
+        return CryptoKdf.Pbkdf2Sha256Pointer(password, password_length, salt, used, iterations, output)
+    }
+    state: CryptoSha256.HmacSha256State
+    defer CryptoSha256.HmacSha256Wipe(*state)
+    CryptoSha256.HmacSha256PrepareText(*state, password_text)
     salt_block: [36]u8 = .[0]
-    used: s64 = salt_length
-    if used > 32 {
-        used = 32
+    u: [32]u8
+    t: [32]u8
+    defer {
+        CryptoWipe.SecureWipe(salt_block[:])
+        CryptoWipe.SecureWipe(u[:])
+        CryptoWipe.SecureWipe(t[:])
     }
     index: s64 = 0
     while index < used {
@@ -77,509 +72,93 @@ Pbkdf2Input :: (password: *u8, password_length: s64,
         index += 1
     }
     salt_block[used + 3] = 1
-
-    current: [Sha256DigestBytes]u8
-    aggregate: [Sha256DigestBytes]u8
-    if Pbkdf2Hmac(password, password_length, password_text, use_text,
-        *salt_block[0], used + 4, *current[0]) == 0 {
-        return 0
-    }
-    index = 0
-    while index < Sha256DigestBytes {
-        aggregate[index] = current[index]
-        index += 1
-    }
-
+    CryptoSha256.HmacSha256Compute(*state, *salt_block[0], used + 4, *u[0])
+    for i: 0..31 { t[i] = u[i] }
     round: u64 = 1
     while round < iterations {
-        if Pbkdf2Hmac(password, password_length, password_text, use_text,
-            *current[0], Sha256DigestBytes, *current[0]) == 0 {
-            return 0
-        }
-        index = 0
-        while index < Sha256DigestBytes {
-            aggregate[index] ^= current[index]
-            index += 1
-        }
+        CryptoSha256.HmacSha256Compute(*state, *u[0], 32, *u[0])
+        for i: 0..31 { t[i] ^= u[i] }
         round += 1
     }
-    index = 0
-    while index < Sha256DigestBytes {
-        output[index] = aggregate[index]
-        index += 1
-    }
+    for i: 0..31 { output[i] = t[i] }
     return 1
 }
 
 #program_export
 Pbkdf2Sha256 :: (password: *u8, password_length: s64,
     salt: *u8, salt_length: s64, iterations: u64, output: *u8) -> s32 {
-    return Pbkdf2Input(password, password_length, "", false,
+    return Pbkdf2Legacy(password, password_length, "", false,
         salt, salt_length, iterations, output)
 }
 
 #program_export
 Pbkdf2Sha256Text :: (password: string, salt: *u8,
     salt_length: s64, iterations: u64, output: *u8) -> s32 {
-    return Pbkdf2Input(null, password.count, password, true,
+    return Pbkdf2Legacy(null, password.count, password, true,
         salt, salt_length, iterations, output)
 }
 
-// Poly1305 over 26-bit limbs for RFC 8439 encrypted records.
-
-Poly1305State :: struct {
-    r: [5]u64
-    scaled: [4]u64
-    h: [5]u64
-}
-
-Poly1305Load32 :: (bytes: *u8) -> u32 {
-    return cast(u32)bytes[0] |
-        (cast(u32)bytes[1] << cast(u32)8) |
-        (cast(u32)bytes[2] << cast(u32)16) |
-        (cast(u32)bytes[3] << cast(u32)24)
-}
-
-Poly1305Store32 :: (bytes: *u8, value: u32) {
-    bytes[0] = cast(u8)value
-    bytes[1] = cast(u8)(value >> cast(u32)8)
-    bytes[2] = cast(u8)(value >> cast(u32)16)
-    bytes[3] = cast(u8)(value >> cast(u32)24)
-}
-
-Poly1305Initialize :: (state: *Poly1305State, key: *u8) {
-    state.* = Poly1305State.{}
-    state.r[0] = cast(u64)Poly1305Load32(key) & cast(u64)0x3ffffff
-    state.r[1] = cast(u64)(Poly1305Load32(*key[3]) >> cast(u32)2) & cast(u64)0x3ffff03
-    state.r[2] = cast(u64)(Poly1305Load32(*key[6]) >> cast(u32)4) & cast(u64)0x3ffc0ff
-    state.r[3] = cast(u64)(Poly1305Load32(*key[9]) >> cast(u32)6) & cast(u64)0x3f03fff
-    state.r[4] = cast(u64)(Poly1305Load32(*key[12]) >> cast(u32)8) & cast(u64)0x00fffff
-    state.scaled[0] = state.r[1] * 5
-    state.scaled[1] = state.r[2] * 5
-    state.scaled[2] = state.r[3] * 5
-    state.scaled[3] = state.r[4] * 5
-}
-
-Poly1305Block :: (state: *Poly1305State, message: *u8, length: s32) {
-    block: [17]u8 = .[0]
-    index: s32 = 0
-    while index < length {
-        block[index] = message[index]
-        index += 1
-    }
-    if length < 16 {
-        block[length] = 1
-    }
-
-    input: [5]u64
-    input[0] = cast(u64)Poly1305Load32(*block[0]) & cast(u64)0x3ffffff
-    input[1] = cast(u64)(Poly1305Load32(*block[3]) >> cast(u32)2) & cast(u64)0x3ffffff
-    input[2] = cast(u64)(Poly1305Load32(*block[6]) >> cast(u32)4) & cast(u64)0x3ffffff
-    input[3] = cast(u64)(Poly1305Load32(*block[9]) >> cast(u32)6) & cast(u64)0x3ffffff
-    input[4] = cast(u64)(Poly1305Load32(*block[12]) >> cast(u32)8)
-    if length == 16 {
-        input[4] |= cast(u64)1 << cast(u64)24
-    }
-
-    index = 0
-    while index < 5 {
-        state.h[index] += input[index]
-        index += 1
-    }
-
-    d0 := state.h[0] * state.r[0] + state.h[1] * state.scaled[3] +
-        state.h[2] * state.scaled[2] + state.h[3] * state.scaled[1] +
-        state.h[4] * state.scaled[0]
-    d1 := state.h[1] * state.r[0] + state.h[2] * state.scaled[3] +
-        state.h[3] * state.scaled[2] + state.h[4] * state.scaled[1] +
-        state.h[0] * state.r[1]
-    d2 := state.h[2] * state.r[0] + state.h[3] * state.scaled[3] +
-        state.h[4] * state.scaled[2] + state.h[0] * state.r[2] +
-        state.h[1] * state.r[1]
-    d3 := state.h[3] * state.r[0] + state.h[4] * state.scaled[3] +
-        state.h[0] * state.r[3] + state.h[1] * state.r[2] +
-        state.h[2] * state.r[1]
-    d4 := state.h[4] * state.r[0] + state.h[0] * state.r[4] +
-        state.h[1] * state.r[3] + state.h[2] * state.r[2] +
-        state.h[3] * state.r[1]
-
-    carry := d0 >> cast(u64)26
-    state.h[0] = d0 & cast(u64)0x3ffffff
-    d1 += carry
-    carry = d1 >> cast(u64)26
-    state.h[1] = d1 & cast(u64)0x3ffffff
-    d2 += carry
-    carry = d2 >> cast(u64)26
-    state.h[2] = d2 & cast(u64)0x3ffffff
-    d3 += carry
-    carry = d3 >> cast(u64)26
-    state.h[3] = d3 & cast(u64)0x3ffffff
-    d4 += carry
-    carry = d4 >> cast(u64)26
-    state.h[4] = d4 & cast(u64)0x3ffffff
-    state.h[0] += carry * 5
-    carry = state.h[0] >> cast(u64)26
-    state.h[0] &= cast(u64)0x3ffffff
-    state.h[1] += carry
-}
-
-Poly1305AeadPadded :: (state: *Poly1305State, data: *u8, length: s64) {
-    offset: s64 = 0
-    while length - offset >= 16 {
-        Poly1305Block(state, *data[offset], 16)
-        offset += 16
-    }
-    if offset < length {
-        padded: [16]u8 = .[0]
-        index: s32 = 0
-        while cast(s64)index < length - offset {
-            padded[index] = data[offset + cast(s64)index]
-            index += 1
-        }
-        Poly1305Block(state, *padded[0], 16)
-    }
-}
-
-Poly1305Finish :: (state: *Poly1305State, key: *u8, tag: *u8) {
-    carry := state.h[1] >> cast(u64)26
-    state.h[1] &= cast(u64)0x3ffffff
-    state.h[2] += carry
-    carry = state.h[2] >> cast(u64)26
-    state.h[2] &= cast(u64)0x3ffffff
-    state.h[3] += carry
-    carry = state.h[3] >> cast(u64)26
-    state.h[3] &= cast(u64)0x3ffffff
-    state.h[4] += carry
-    carry = state.h[4] >> cast(u64)26
-    state.h[4] &= cast(u64)0x3ffffff
-    state.h[0] += carry * 5
-    carry = state.h[0] >> cast(u64)26
-    state.h[0] &= cast(u64)0x3ffffff
-    state.h[1] += carry
-
-    reduced: [5]u64
-    reduced[0] = state.h[0] + 5
-    carry = reduced[0] >> cast(u64)26
-    reduced[0] &= cast(u64)0x3ffffff
-    reduced[1] = state.h[1] + carry
-    carry = reduced[1] >> cast(u64)26
-    reduced[1] &= cast(u64)0x3ffffff
-    reduced[2] = state.h[2] + carry
-    carry = reduced[2] >> cast(u64)26
-    reduced[2] &= cast(u64)0x3ffffff
-    reduced[3] = state.h[3] + carry
-    carry = reduced[3] >> cast(u64)26
-    reduced[3] &= cast(u64)0x3ffffff
-    reduced[4] = state.h[4] + carry - (cast(u64)1 << cast(u64)26)
-
-    use_reduced := (reduced[4] >> cast(u64)63) - 1
-    index: s32 = 0
-    while index < 5 {
-        state.h[index] = (state.h[index] & ~use_reduced) |
-            (reduced[index] & use_reduced)
-        index += 1
-    }
-
-    low := state.h[0] | (state.h[1] << cast(u64)26) |
-        ((state.h[2] & cast(u64)0xfff) << cast(u64)52)
-    high := (state.h[2] >> cast(u64)12) |
-        (state.h[3] << cast(u64)14) | (state.h[4] << cast(u64)40)
-
-    word := (low & cast(u64)0xffffffff) + cast(u64)Poly1305Load32(*key[16])
-    Poly1305Store32(tag, cast(u32)word)
-    word = (low >> cast(u64)32) + cast(u64)Poly1305Load32(*key[20]) +
-        (word >> cast(u64)32)
-    Poly1305Store32(*tag[4], cast(u32)word)
-    word = (high & cast(u64)0xffffffff) + cast(u64)Poly1305Load32(*key[24]) +
-        (word >> cast(u64)32)
-    Poly1305Store32(*tag[8], cast(u32)word)
-    word = (high >> cast(u64)32) + cast(u64)Poly1305Load32(*key[28]) +
-        (word >> cast(u64)32)
-    Poly1305Store32(*tag[12], cast(u32)word)
-}
-
-Poly1305AeadTag :: (key: *u8, aad: *u8, aad_length: s64,
-    ciphertext: *u8, ciphertext_length: s64, tag: *u8) {
-    state: Poly1305State
-    Poly1305Initialize(*state, key)
-    if aad_length > 0 {
-        Poly1305AeadPadded(*state, aad, aad_length)
-    }
-    if ciphertext_length > 0 {
-        Poly1305AeadPadded(*state, ciphertext, ciphertext_length)
-    }
-    lengths: [16]u8
-    Poly1305Store32(*lengths[0], cast(u32)aad_length)
-    Poly1305Store32(*lengths[4], cast(u32)(cast(u64)aad_length >> cast(u64)32))
-    Poly1305Store32(*lengths[8], cast(u32)ciphertext_length)
-    Poly1305Store32(*lengths[12], cast(u32)(cast(u64)ciphertext_length >> cast(u64)32))
-    Poly1305Block(*state, *lengths[0], 16)
-    Poly1305Finish(*state, key, tag)
-}
-
-// RFC 8439 ChaCha20-Poly1305 for encrypted records and key files.
-ChaChaBlockBytes :: 64
-ChaChaTagBytes :: 16
-
-ChaChaLengthValid :: (length: s64) -> bool {
-    if length < 0 {
+// Full-salt PBKDF2-HMAC-SHA-256 (no 32-byte truncation) for v3 key files.
+Pbkdf2Sha256TextFull :: (password: string, salt: []u8, iterations: u64, output: []u8) -> bool {
+    if output.count != 32 || iterations == 0 || iterations > 100000000 ||
+        salt.count < 0 || salt.count > 1024 {
         return false
     }
-    full_blocks := length / ChaChaBlockBytes
-    if full_blocks > cast(s64)4294967295 {
-        return false
+    state: CryptoSha256.HmacSha256State
+    defer CryptoSha256.HmacSha256Wipe(*state)
+    CryptoSha256.HmacSha256PrepareText(*state, password)
+    salt_block: [1028]u8 = .[0]
+    u: [32]u8
+    t: [32]u8
+    defer {
+        CryptoWipe.SecureWipe(salt_block[:])
+        CryptoWipe.SecureWipe(u[:])
+        CryptoWipe.SecureWipe(t[:])
     }
-    if full_blocks == cast(s64)4294967295 &&
-        length % ChaChaBlockBytes != 0 {
-        return false
+    for index: cast(s64)0..salt.count - 1 {
+        salt_block[index] = salt[index]
     }
-    return true
-}
-
-ChaChaRotateLeft :: (value: u32, bits: u32) -> u32 {
-    return (value << bits) | (value >> (cast(u32)32 - bits))
-}
-
-ChaChaQuarterRound :: (state: *u32, a: s32, b: s32, c: s32, d: s32) {
-    state[a] += state[b]
-    state[d] ^= state[a]
-    state[d] = ChaChaRotateLeft(state[d], 16)
-    state[c] += state[d]
-    state[b] ^= state[c]
-    state[b] = ChaChaRotateLeft(state[b], 12)
-    state[a] += state[b]
-    state[d] ^= state[a]
-    state[d] = ChaChaRotateLeft(state[d], 8)
-    state[c] += state[d]
-    state[b] ^= state[c]
-    state[b] = ChaChaRotateLeft(state[b], 7)
-}
-
-ChaChaBlock :: (key: *u8, nonce: *u8, counter: u32, output: *u8) {
-    initial: [16]u32
-    working: [16]u32
-    initial[0] = 0x61707865
-    initial[1] = 0x3320646e
-    initial[2] = 0x79622d32
-    initial[3] = 0x6b206574
-    index: s32 = 0
-    while index < 8 {
-        initial[4 + index] = Poly1305Load32(*key[index * 4])
-        index += 1
-    }
-    initial[12] = counter
-    initial[13] = Poly1305Load32(nonce)
-    initial[14] = Poly1305Load32(*nonce[4])
-    initial[15] = Poly1305Load32(*nonce[8])
-    index = 0
-    while index < 16 {
-        working[index] = initial[index]
-        index += 1
-    }
-
-    round: s32 = 0
-    while round < 10 {
-        ChaChaQuarterRound(*working[0], 0, 4, 8, 12)
-        ChaChaQuarterRound(*working[0], 1, 5, 9, 13)
-        ChaChaQuarterRound(*working[0], 2, 6, 10, 14)
-        ChaChaQuarterRound(*working[0], 3, 7, 11, 15)
-        ChaChaQuarterRound(*working[0], 0, 5, 10, 15)
-        ChaChaQuarterRound(*working[0], 1, 6, 11, 12)
-        ChaChaQuarterRound(*working[0], 2, 7, 8, 13)
-        ChaChaQuarterRound(*working[0], 3, 4, 9, 14)
+    salt_block[salt.count + 3] = 1
+    CryptoSha256.HmacSha256Compute(*state, *salt_block[0], salt.count + 4, *u[0])
+    for i: 0..31 { t[i] = u[i] }
+    round: u64 = 1
+    while round < iterations {
+        CryptoSha256.HmacSha256Compute(*state, *u[0], 32, *u[0])
+        for i: 0..31 { t[i] ^= u[i] }
         round += 1
     }
-    index = 0
-    while index < 16 {
-        Poly1305Store32(*output[index * 4], working[index] + initial[index])
-        index += 1
-    }
-}
-
-ChaChaXor :: (key: *u8, nonce: *u8, input: *u8,
-    length: s64, output: *u8) {
-    offset: s64 = 0
-    counter: u32 = 1
-    while offset < length {
-        block: [ChaChaBlockBytes]u8
-        ChaChaBlock(key, nonce, counter, *block[0])
-        count: s64 = length - offset
-        if count > ChaChaBlockBytes {
-            count = ChaChaBlockBytes
-        }
-        index: s64 = 0
-        while index < count {
-            output[offset + index] = input[offset + index] ^ block[index]
-            index += 1
-        }
-        offset += count
-        counter += 1
-    }
-}
-
-ChaChaMacKey :: (key: *u8, nonce: *u8, output: *u8) {
-    block: [ChaChaBlockBytes]u8
-    ChaChaBlock(key, nonce, 0, *block[0])
-    index: s32 = 0
-    while index < 32 {
-        output[index] = block[index]
-        index += 1
-    }
+    for i: 0..31 { output[i] = t[i] }
+    return true
 }
 
 #program_export
 ChaCha20Poly1305Seal :: (key: *u8, nonce: *u8,
     plain: *u8, plain_length: s64, aad: *u8, aad_length: s64,
     output: *u8, output_capacity: s64) -> s32 {
-    if key == null || nonce == null || output == null ||
-        !ChaChaLengthValid(plain_length) ||
-        aad_length < 0 ||
-        (plain == null && plain_length > 0) ||
-        (aad == null && aad_length > 0) ||
-        output_capacity < ChaChaTagBytes ||
-        plain_length > output_capacity - ChaChaTagBytes {
-        return 0
-    }
-
-    mac_key: [32]u8
-    tag: [ChaChaTagBytes]u8
-    ChaChaMacKey(key, nonce, *mac_key[0])
-    if plain_length > 0 {
-        ChaChaXor(key, nonce, plain, plain_length, output)
-    }
-    Poly1305AeadTag(*mac_key[0], aad, aad_length,
-        output, plain_length, *tag[0])
-    index: s32 = 0
-    while index < ChaChaTagBytes {
-        output[plain_length + cast(s64)index] = tag[index]
-        index += 1
-    }
-    return 1
+    return CryptoChaCha.ChaCha20Poly1305Seal(key, nonce, plain, plain_length,
+        aad, aad_length, output, output_capacity)
 }
 
 #program_export
 ChaCha20Poly1305Open :: (key: *u8, nonce: *u8,
     sealed: *u8, sealed_length: s64, aad: *u8, aad_length: s64,
     plain: *u8, plain_capacity: s64) -> s32 {
-    if key == null || nonce == null || sealed == null ||
-        sealed_length < ChaChaTagBytes ||
-        !ChaChaLengthValid(sealed_length - ChaChaTagBytes) ||
-        aad_length < 0 || (aad == null && aad_length > 0) ||
-        plain_capacity < sealed_length - ChaChaTagBytes ||
-        (plain == null && sealed_length > ChaChaTagBytes) {
-        return 0
-    }
-
-    plain_length := sealed_length - ChaChaTagBytes
-    mac_key: [32]u8
-    tag: [ChaChaTagBytes]u8
-    ChaChaMacKey(key, nonce, *mac_key[0])
-    Poly1305AeadTag(*mac_key[0], aad, aad_length,
-        sealed, plain_length, *tag[0])
-    difference: u8 = 0
-    index: s32 = 0
-    while index < ChaChaTagBytes {
-        difference |= tag[index] ^ sealed[plain_length + cast(s64)index]
-        index += 1
-    }
-    if difference != 0 {
-        return 0
-    }
-    if plain_length > 0 {
-        ChaChaXor(key, nonce, sealed, plain_length, plain)
-    }
-    return 1
+    return CryptoChaCha.ChaCha20Poly1305Open(key, nonce, sealed, sealed_length,
+        aad, aad_length, plain, plain_capacity)
 }
 
-// HChaCha20 (draft-irtf-cfrg-xchacha): the ChaCha20 rounds over the key and
-// a 16-byte nonce, without the final addition; words 0-3 and 12-15 are the
-// 32-byte subkey.
-HChaCha20 :: (key: *u8, nonce: *u8, output: *u8) {
-    working: [16]u32
-    working[0] = 0x61707865
-    working[1] = 0x3320646e
-    working[2] = 0x79622d32
-    working[3] = 0x6b206574
-    index: s32 = 0
-    while index < 8 {
-        working[4 + index] = Poly1305Load32(*key[index * 4])
-        index += 1
-    }
-    index = 0
-    while index < 4 {
-        working[12 + index] = Poly1305Load32(*nonce[index * 4])
-        index += 1
-    }
-    round: s32 = 0
-    while round < 10 {
-        ChaChaQuarterRound(*working[0], 0, 4, 8, 12)
-        ChaChaQuarterRound(*working[0], 1, 5, 9, 13)
-        ChaChaQuarterRound(*working[0], 2, 6, 10, 14)
-        ChaChaQuarterRound(*working[0], 3, 7, 11, 15)
-        ChaChaQuarterRound(*working[0], 0, 5, 10, 15)
-        ChaChaQuarterRound(*working[0], 1, 6, 11, 12)
-        ChaChaQuarterRound(*working[0], 2, 7, 8, 13)
-        ChaChaQuarterRound(*working[0], 3, 4, 9, 14)
-        round += 1
-    }
-    index = 0
-    while index < 4 {
-        Poly1305Store32(*output[index * 4], working[index])
-        Poly1305Store32(*output[16 + index * 4], working[12 + index])
-        index += 1
-    }
-}
-
-// The subkey and 12-byte nonce that XChaCha20-Poly1305 hands to
-// ChaCha20-Poly1305: four zero bytes, then the last 8 nonce bytes.
-XChaChaSubkey :: (key: *u8, nonce: *u8, subkey: *u8, short_nonce: *u8) {
-    HChaCha20(key, nonce, subkey)
-    index: s32 = 0
-    while index < 12 {
-        short_nonce[index] = ifx index < 4 then cast(u8)0 else nonce[12 + index]
-        index += 1
-    }
-}
-
-XChaChaWipe :: (bytes: *u8, length: s32) {
-    index: s32 = 0
-    while index < length {
-        bytes[index] = 0
-        index += 1
-    }
-}
-
-// XChaCha20-Poly1305 with a 24-byte nonce, the same construction as
-// libsodium's crypto_aead_xchacha20poly1305_ietf and Monocypher's AEAD:
-// output receives the ciphertext and its 16-byte tag.
 #program_export
 XChaCha20Poly1305Seal :: (key: *u8, nonce: *u8,
     plain: *u8, plain_length: s64, aad: *u8, aad_length: s64,
     output: *u8, output_capacity: s64) -> s32 {
-    if key == null || nonce == null {
-        return 0
-    }
-    subkey: [32]u8
-    short_nonce: [12]u8
-    XChaChaSubkey(key, nonce, *subkey[0], *short_nonce[0])
-    sealed := ChaCha20Poly1305Seal(*subkey[0], *short_nonce[0], plain, plain_length,
+    return CryptoChaCha.XChaCha20Poly1305Seal(key, nonce, plain, plain_length,
         aad, aad_length, output, output_capacity)
-    XChaChaWipe(*subkey[0], 32)
-    return sealed
 }
 
 #program_export
 XChaCha20Poly1305Open :: (key: *u8, nonce: *u8,
     sealed: *u8, sealed_length: s64, aad: *u8, aad_length: s64,
     plain: *u8, plain_capacity: s64) -> s32 {
-    if key == null || nonce == null {
-        return 0
-    }
-    subkey: [32]u8
-    short_nonce: [12]u8
-    XChaChaSubkey(key, nonce, *subkey[0], *short_nonce[0])
-    opened := ChaCha20Poly1305Open(*subkey[0], *short_nonce[0], sealed, sealed_length,
+    return CryptoChaCha.XChaCha20Poly1305Open(key, nonce, sealed, sealed_length,
         aad, aad_length, plain, plain_capacity)
-    XChaChaWipe(*subkey[0], 32)
-    return opened
 }

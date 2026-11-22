@@ -111,9 +111,9 @@ StartLogin :: (pending: *PendingRequest) {
     if !SetPendingAddress(pending, "/api/v1/sync/login") {
         return
     }
-    pending.headers[0].name = "X-Daochi-User"
+    pending.headers[0].name = "X-Mesh-User"
     pending.headers[0].value = pending.client.identity.account_id
-    pending.headers[1].name = "X-Daochi-Signature"
+    pending.headers[1].name = "X-Mesh-Signature"
     pending.headers[1].value = TextUntilNul(pending.signature[:])
     request: HttpRequest
     request.method = "POST"
@@ -129,9 +129,9 @@ StartBearer :: (pending: *PendingRequest) {
     if !SetPendingAddress(pending, pending.path) {
         return
     }
-    pending.headers[0].name = "X-Daochi-User"
+    pending.headers[0].name = "X-Mesh-User"
     pending.headers[0].value = pending.client.identity.account_id
-    pending.headers[1].name = "X-Daochi-Client"
+    pending.headers[1].name = "X-Mesh-Client"
     pending.headers[1].value = pending.client.identity.client_id
     index: s32 = 0
     while index < pending.extra_count {

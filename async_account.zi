@@ -116,9 +116,9 @@ PollDeletion :: (pending: *PendingDeletion) -> bool {
         FinishDeletion(pending, cast(AuthResult)AuthResult.AUTH_INVALID_URL)
         return true
     }
-    pending.headers[0].name = "X-Daochi-User"
+    pending.headers[0].name = "X-Mesh-User"
     pending.headers[0].value = pending.client.identity.account_id
-    pending.headers[1].name = "X-Daochi-Signature"
+    pending.headers[1].name = "X-Mesh-Signature"
     pending.headers[1].value = TextUntilNul(pending.signature[:])
     request: HttpRequest
     request.method = "POST"

@@ -80,9 +80,9 @@ DeleteAccount :: (client: Client) -> AuthResult {
         return cast(AuthResult)AuthResult.AUTH_INVALID_URL
     }
     headers: [2]HttpHeader
-    headers[0].name = "X-Daochi-User"
+    headers[0].name = "X-Mesh-User"
     headers[0].value = client.identity.account_id
-    headers[1].name = "X-Daochi-Signature"
+    headers[1].name = "X-Mesh-Signature"
     headers[1].value = TextUntilNul(signature[:])
     request: HttpRequest
     request.method = "POST"

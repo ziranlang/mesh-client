@@ -94,8 +94,8 @@ static bool send_request(void *context, HttpRequest request,
         assert(strstr(request.url.data, "/api/v1/sync") != NULL);
         assert(request.headers.length == 3);
         const HttpHeader *headers = request.headers.data;
-        assert(headers[2].name.length == 11);
-        assert(memcmp(headers[2].name.data, "X-Daochi-Tx", 11) == 0);
+        assert(headers[2].name.length == 9);
+        assert(memcmp(headers[2].name.data, "X-Mesh-Tx", 9) == 0);
         assert(strstr(headers[2].value.data, "\"protocol_version\":6") != NULL);
         assert(strstr(headers[2].value.data, server->stage == 4 ? "\"tx_id\":\"222222" : "\"tx_id\":\"444444") != NULL);
         assert(strstr(headers[2].value.data, server->stage == 4 ? "\"nonce\":\"333333" : "\"nonce\":\"555555") != NULL);

@@ -169,7 +169,7 @@ static bool start(void *context, HttpRequest request, Slice output)
         HttpHeader *headers = request.headers.data;
         assert(StringEqual(headers[0].name, StringLiteral("Authorization")));
         assert(strncmp(headers[0].value.data, "Delegate ds1.", 13) == 0);
-        assert(StringEqual(headers[1].name, StringLiteral("X-Daochi-Delegate")));
+        assert(StringEqual(headers[1].name, StringLiteral("X-Mesh-Delegate")));
         assert(strstr(headers[1].value.data, "\"node_id\":"));
         copy_output(output, "{\"collection\":\"private.inbe.v2.lumi\",\"records\":[],\"next_version\":1,\"truncated\":false,\"applied\":0}");
     }

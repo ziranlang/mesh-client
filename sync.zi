@@ -202,7 +202,7 @@ Sync :: (client: Client, session: *Session, device: Device,
             return prepared
         }
         extra: [1]HttpHeader
-        extra[0].name = "X-Daochi-Tx"
+        extra[0].name = "X-Mesh-Tx"
         extra[0].value = TextUntilNul(transaction_header[:])
         result := BearerRequestWithHeaders(client, session, now,
             "POST", "/api/v1/sync", body, output, status, extra[:])

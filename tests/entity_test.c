@@ -155,6 +155,11 @@ int main(void)
     assert(EntityTestSealRecord(account, StringLiteral(RECORD_ACCOUNT), StringLiteral("levels"),
         StringLiteral(RECORD_ID), StringLiteral("entity.levels.v1"), bytes(RECORD_PLAIN, plain_size),
         bytes(nonce, 24), bytes(scratch, sizeof scratch), bytes(text_out, 100)) == -1);
+    /* Single-chunk seal rejects mismatched hash to prevent zero-nonce reuse. */
+    unsigned char bad_plain[4] = {1, 2, 3, 4};
+    unsigned char bad_out[32];
+    assert(EntityTestSeal(account, StringLiteral("photos"), StringLiteral(SMALL_HASH),
+        0, bytes(bad_plain, sizeof bad_plain), bytes(bad_out, sizeof bad_out)) == -1);
     puts("Entity record keys, records and chunked shared blobs passed");
     return 0;
 }

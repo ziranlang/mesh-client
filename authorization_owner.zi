@@ -126,7 +126,7 @@ OwnerAuthorizationRequest :: (client: Client, session: *Session, device: Device,
         return prepared
     }
     extra: [1]HttpHeader
-    extra[0].name = "X-Daochi-Tx"
+    extra[0].name = "X-Mesh-Tx"
     extra[0].value = TextUntilNul(header[:])
     return BearerRequestWithHeaders(client, session, now, "POST", path, body,
         output, status, extra[:])

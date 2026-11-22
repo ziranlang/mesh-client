@@ -93,7 +93,7 @@ StartSyncTransaction :: (pending: *PendingSync) {
         return
     }
     extra: [1]HttpHeader
-    extra[0].name = "X-Daochi-Tx"
+    extra[0].name = "X-Mesh-Tx"
     extra[0].value = TextUntilNul(pending.transaction_header[:])
     pending.stage = 3
     if !BeginRequest(*pending.request, pending.client, pending.session,

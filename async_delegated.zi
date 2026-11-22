@@ -114,7 +114,7 @@ StartDelegateRequest :: (pending: *PendingDelegate) {
     }
     pending.headers[0].name = "Authorization"
     pending.headers[0].value = TextUntilNul(pending.credential[:])
-    pending.headers[1].name = ifx pending.telegram then "X-Mesh-Delegate" else "X-Daochi-Delegate"
+    pending.headers[1].name = "X-Mesh-Delegate"
     pending.headers[1].value = TextUntilNul(pending.proof[:])
     StartDelegateTransfer(pending, path, pending.body, pending.output, 3, pending.headers[:], method, query)
 }

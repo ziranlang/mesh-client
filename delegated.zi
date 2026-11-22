@@ -715,7 +715,7 @@ DelegateRequest :: (client: DelegateClient, session: *DelegateSession, now: s64,
     headers: [2]HttpHeader
     headers[0].name = "Authorization"
     headers[0].value = TextUntilNul(credential[:])
-    headers[1].name = "X-Daochi-Delegate"
+    headers[1].name = "X-Mesh-Delegate"
     headers[1].value = TextUntilNul(header[:])
     request: HttpRequest
     request.method = "POST"

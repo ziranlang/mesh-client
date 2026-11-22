@@ -133,8 +133,8 @@ Start :: (context: *void, request: HttpRequest, output: []u8) -> bool {
         deletions += 1
         if request.method != "POST" || request.token.count != 0 ||
         request.headers.count != 2 ||
-        request.headers[0].name != "X-Daochi-User" ||
-        request.headers[1].name != "X-Daochi-Signature" ||
+        request.headers[0].name != "X-Mesh-User" ||
+        request.headers[1].name != "X-Mesh-Signature" ||
         request.headers[1].value.count != 4840 ||
         !Contains(request.body, "\"public_key\":\"public-key\"") {
             bad_request = true
@@ -208,7 +208,7 @@ Start :: (context: *void, request: HttpRequest, output: []u8) -> bool {
         writer = WriteText(writer, "\"}]}}\n")
         return writer.valid
     }
-    if request.headers.count != 3 || request.headers[2].name != "X-Daochi-Tx" ||
+    if request.headers.count != 3 || request.headers[2].name != "X-Mesh-Tx" ||
     !Contains(request.headers[2].value, "\"protocol_version\":6") ||
     !Contains(request.headers[2].value, "\"device_signature\":\"dddd") ||
     request.body != "{\"protocol_version\":6}" {

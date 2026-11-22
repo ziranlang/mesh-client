@@ -86,9 +86,9 @@ Login :: (client: Client, session: *Session) -> AuthResult {
 
     request: HttpRequest
     headers: [2]HttpHeader
-    headers[0].name = "X-Daochi-User"
+    headers[0].name = "X-Mesh-User"
     headers[0].value = client.identity.account_id
-    headers[1].name = "X-Daochi-Signature"
+    headers[1].name = "X-Mesh-Signature"
     headers[1].value = TextUntilNul(signature[:])
     request.method = "POST"
     request.url = TextUntilNul(url[:])
@@ -211,9 +211,9 @@ BearerRequestWithHeaders :: (client: Client, session: *Session, now: s64,
         // cleared or replaced. Keep its borrowed request inside that lifetime.
         {
             headers: [16]HttpHeader
-            headers[0].name = "X-Daochi-User"
+            headers[0].name = "X-Mesh-User"
             headers[0].value = client.identity.account_id
-            headers[1].name = "X-Daochi-Client"
+            headers[1].name = "X-Mesh-Client"
             headers[1].value = client.identity.client_id
             header_count: s64 = 2
             index: s64 = 0

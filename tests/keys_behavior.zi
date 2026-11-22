@@ -110,5 +110,23 @@ main :: () -> s32 {
     if ParseEncryptedAccountKeys(TextUntilNul(sealed[:]), "correct horse", *opened) != 0 {
         return 13
     }
+    // v3 encrypted key file uses full 16-byte salt, XChaCha20-Poly1305, and
+    // authenticates the entire header block as AAD.
+    sealed_v3: [ACCOUNT_EXPORT_ENCRYPTED_TEXT_SIZE]u8
+    if AccountKeysEncryptedV3Text(*account, "correct horse", *sealed_v3[0], ACCOUNT_EXPORT_ENCRYPTED_TEXT_SIZE) == 0 {
+        return 14
+    }
+    if ParseEncryptedAccountKeys(TextUntilNul(sealed_v3[:]), "correct horse", *opened) == 0 ||
+        !AccountValuesEqual(*account, *opened) {
+        return 15
+    }
+    if ParseEncryptedAccountKeys(TextUntilNul(sealed_v3[:]), "wrong horse", *opened) != 0 {
+        return 16
+    }
+    // Mutating the authenticated header (algorithm=ML-DSA-44 -> ML-DSA-45) must fail AAD verification.
+    sealed_v3[37] = cast(u8)53
+    if ParseEncryptedAccountKeys(TextUntilNul(sealed_v3[:]), "correct horse", *opened) != 0 {
+        return 17
+    }
     return 0
 }
