@@ -361,8 +361,8 @@ ValidateAccountKeys :: (account: *AccountKeys) -> s32 {
         return 0
     }
     Sha256Hex(*public_key[0], 1312, *expected_id[0])
-    id := AccountBufferText(*account.public_id[0], ACCOUNT_PUBLIC_ID_HEX_SIZE)
-    if id.count == 0 {
+    id_count := AccountBufferText(*account.public_id[0], ACCOUNT_PUBLIC_ID_HEX_SIZE).count
+    if id_count == 0 {
         index: s64 = 0
         while index < ACCOUNT_PUBLIC_ID_HEX_SIZE {
             account.public_id[index] = expected_id[index]
@@ -370,7 +370,7 @@ ValidateAccountKeys :: (account: *AccountKeys) -> s32 {
         }
         return 1
     }
-    if id.count != 64 { return 0 }
+    if id_count != 64 { return 0 }
     index: s64 = 0
     while index < 65 {
         if account.public_id[index] != expected_id[index] { return 0 }

@@ -36,7 +36,7 @@ test_headers() {
         module=${source##*/}
         module=${module%.zi}
         selected=
-        for candidate in "$generated/$module.h" "$generated"/p*_"$module.h"; do
+        for candidate in "$generated/$module.h" "$generated/mesh_client__$module.h" "$generated"/p*_"$module.h"; do
             [ -f "$candidate" ] || continue
             header=${candidate##*/}
             if [ -z "$selected" ] || [ "${#header}" -lt "${#selected}" ]; then

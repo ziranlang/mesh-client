@@ -163,9 +163,12 @@ AccountKeysEncryptedArgon2idText :: (account: *Keys.AccountKeys,
         output[0] = 0
         return 0
     }
-    aad_bytes := BytesFromPointer(output, cast(u64)cursor)
-    sealed_length := Native.XChaCha20Poly1305Seal(plaintext[0:plain_length], aad_bytes,
-        key[:], nonce[:], sealed[:])
+    sealed_length: s64
+    {
+        aad_bytes := BytesFromPointer(output, cast(u64)cursor)
+        sealed_length = Native.XChaCha20Poly1305Seal(plaintext[0:plain_length], aad_bytes,
+            key[:], nonce[:], sealed[:])
+    }
     if sealed_length != plain_length + 16 {
         output[0] = 0
         return 0
