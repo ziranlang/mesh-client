@@ -11,11 +11,11 @@
       "url": "https://github.com/open-quantum-safe/liboqs.git"
     },
     {
-      "commit": "cd4a75b3383e49dd5eb10a18b2181fe74b161880",
+      "commit": "b650c1444b99a672d78b5c1a54f7026b345c1dfe",
       "dependencies": {},
-      "id": "waozi_xyz_ziranlang_crypto_cd4a75b3383e",
+      "id": "waozi_xyz_ziranlang_crypto_b650c1444b99",
       "name": "crypto",
-      "ref": "cd4a75b3383e49dd5eb10a18b2181fe74b161880",
+      "ref": "b650c1444b99a672d78b5c1a54f7026b345c1dfe",
       "url": "https://git.waozi.xyz/ziranlang/crypto.git"
     },
     {
@@ -29,13 +29,13 @@
     }
   ],
   "root": {
-    "dependencies": {"crypto": "waozi_xyz_ziranlang_crypto_cd4a75b3383e", "oqs": "waozi_xyz_ziranlang_oqs_22d2ddbdc236"},
-    "dependency_refs": {"crypto": "cd4a75b3383e49dd5eb10a18b2181fe74b161880", "oqs": "22d2ddbdc236796953c905a05a2cebf5ab1b4ff3"},
+    "dependencies": {"crypto": "waozi_xyz_ziranlang_crypto_b650c1444b99", "oqs": "waozi_xyz_ziranlang_oqs_22d2ddbdc236"},
+    "dependency_refs": {"crypto": "b650c1444b99a672d78b5c1a54f7026b345c1dfe", "oqs": "22d2ddbdc236796953c905a05a2cebf5ab1b4ff3"},
     "name": "mesh_client"
   },
   "toolchain": {
-    "commit": "0affd948205733bc370b6802f9730d8edf5e1e35",
-    "ref": "5db3d3c39425d5dfe4bfe4a84e6f6e2e5a810ad0",
+    "commit": "fe57aa00fe91541afd347d3be0aad7fcf8d3044f",
+    "ref": "fe57aa00fe91541afd347d3be0aad7fcf8d3044f",
     "url": "https://git.waozi.xyz/ziranlang/ziran.git"
   }
 }

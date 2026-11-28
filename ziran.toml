@@ -4,7 +4,7 @@ module_roots = ["."]
 
 [toolchain]
 git = "https://git.waozi.xyz/ziranlang/ziran.git"
-ref = "5db3d3c39425d5dfe4bfe4a84e6f6e2e5a810ad0"
+ref = "fe57aa00fe91541afd347d3be0aad7fcf8d3044f"
 
 [exports]
 authorization = "authorization.zi"
@@ -45,4 +45,4 @@ ref = "22d2ddbdc236796953c905a05a2cebf5ab1b4ff3"
 
 [dependencies.crypto]
 git = "https://git.waozi.xyz/ziranlang/crypto.git"
-ref = "cd4a75b3383e49dd5eb10a18b2181fe74b161880"
+ref = "b650c1444b99a672d78b5c1a54f7026b345c1dfe"
